@@ -5,8 +5,11 @@
     <UseWPF>true</UseWPF>
     <AssemblyName>SongSense</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets/SongSense.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
+    <Resource Include="Assets/SongSense.png" />
+    <Resource Include="Assets/SongSense.ico" />
     <ProjectReference Include="../SongSense.Core/SongSense.Core.csproj" />
     <ProjectReference Include="../SongSense.Infrastructure/SongSense.Infrastructure.csproj" />
   </ItemGroup>

@@ -1,63 +1,99 @@
 <Window x:Class="SongSense.App.MainWindow"
  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
- Title="SongSense" Width="480" Height="720" MinWidth="360" MinHeight="480"
- Background="#10131E" Foreground="#F3F4FA" FontFamily="Segoe UI"
- WindowStartupLocation="CenterScreen">
- <Grid Margin="20">
-  <Grid.RowDefinitions>
-   <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
-   <RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" />
-  </Grid.RowDefinitions>
-  <StackPanel Margin="0,0,0,20">
-   <TextBlock Text="SongSense" FontSize="26" FontWeight="SemiBold" />
-   <TextBlock Text="Entiende lo que escuchas" Foreground="{StaticResource Muted}" FontSize="13" Margin="0,4,0,0" />
+ Title="Song Sense" Width="860" Height="780" MinWidth="360" MinHeight="480"
+ Background="{StaticResource Canvas}" Foreground="{StaticResource Ink}" FontFamily="Segoe UI"
+ Icon="pack://application:,,,/SongSense;component/Assets/SongSense.ico"
+ WindowStartupLocation="CenterScreen" SizeChanged="AdaptReadingLayout">
+ <ScrollViewer x:Name="WindowViewport" VerticalScrollBarVisibility="Disabled" HorizontalScrollBarVisibility="Disabled" VerticalContentAlignment="Stretch">
+ <Grid x:Name="RootGrid" Margin="24">
+  <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+  <StackPanel x:Name="HeaderBlock" Margin="0,0,0,18">
+   <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left" MaxWidth="380">
+    <TextBlock FontFamily="Georgia" FontSize="34" Foreground="{StaticResource Gold}" TextWrapping="NoWrap" AutomationProperties.Name="Song Sense"><Run Text="&#x1D11E;" FontFamily="Segoe UI Symbol" FontSize="42" /><Run Text="ong " /><Run Text="&#x1D11E;" FontFamily="Segoe UI Symbol" FontSize="42" /><Run Text="ense" /></TextBlock>
+   </Viewbox>
+   <TextBlock x:Name="BrandTagline" Text="TU MÚSICA, MÁS SIGNIFICADO" Foreground="{StaticResource Muted}" FontSize="11" Margin="0,4,0,0" />
   </StackPanel>
-  <Border Grid.Row="1" Background="#1B2030" CornerRadius="12" Padding="16" Margin="0,0,0,20">
+  <Border x:Name="SongCard" Grid.Row="1" Background="{StaticResource Surface}" CornerRadius="12" Padding="18" Margin="0,0,0,18" BorderBrush="{StaticResource Outline}" BorderThickness="1">
    <StackPanel>
-    <TextBlock Text="CANCIÓN ACTUAL" FontSize="11" Foreground="{StaticResource Muted}" />
-    <TextBlock Text="{Binding TrackTitle}" FontSize="20" FontWeight="SemiBold" Margin="0,8,0,0" />
-    <TextBlock Text="{Binding Artist}" Foreground="{StaticResource Muted}" FontSize="14" Margin="0,4,0,12" />
-    <TextBlock Text="{Binding Album}" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,0,0,4" />
-    <TextBlock Text="{Binding Duration}" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,0,0,12" />
-    <Border HorizontalAlignment="Left" Background="#292C42" CornerRadius="6" Padding="10,5">
-     <TextBlock Text="{Binding Status}" FontSize="12" Foreground="#C8BDFF" />
-    </Border>
+    <DockPanel Margin="0,0,0,10">
+     <Border DockPanel.Dock="Right" Background="#30291D" CornerRadius="6" Padding="10,5" Margin="8,0,0,0"><TextBlock Text="{Binding Status}" FontSize="12" Foreground="{StaticResource Gold}" /></Border>
+     <TextBlock Text="CANCIÓN ACTUAL" Foreground="{StaticResource Muted}" FontSize="11" VerticalAlignment="Center" />
+    </DockPanel>
+    <TextBlock x:Name="TrackTitleText" Text="{Binding TrackTitle}" ToolTip="{Binding TrackTitle}" FontFamily="Georgia" FontSize="26" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+    <TextBlock Text="{Binding Artist}" ToolTip="{Binding Artist}" Foreground="{StaticResource Muted}" FontSize="15" Margin="0,5,0,0" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+    <DockPanel x:Name="TrackMetadata" Margin="0,6,0,14">
+     <TextBlock DockPanel.Dock="Right" Text="{Binding Duration}" Foreground="{StaticResource Muted}" FontSize="12" Margin="16,0,0,0" />
+     <TextBlock Text="{Binding Album}" ToolTip="{Binding Album}" Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+    </DockPanel>
+    <WrapPanel x:Name="ActionsPanel">
+     <Button Content="Traducir y explicar" Style="{StaticResource PrimaryButton}" Command="{Binding GenerateInsightCommand}" AutomationProperties.AutomationId="GenerateInsight" Margin="0,0,8,6" ToolTip="Una solicitud de pago: idioma, traducción y significado. Solo con letra confirmada e IA activada." />
+     <Button Content="Cancelar análisis" Command="{Binding CancelInsightCommand}" Margin="0,0,8,6">
+      <Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Style.Triggers><Trigger Property="IsEnabled" Value="False"><Setter Property="Visibility" Value="Collapsed" /></Trigger></Style.Triggers></Style></Button.Style>
+     </Button>
+     <Button Content="Buscar letra" Style="{StaticResource PrimaryButton}" Command="{Binding SearchLyricsCommand}" AutomationProperties.AutomationId="SearchLyrics" Margin="0,0,8,6" ToolTip="Busca la letra de esta canción en LRCLIB" />
+     <Button Content="Cambiar letra" Click="ChangeLyrics" IsEnabled="{Binding CanEditLyrics}" Margin="0,0,8,6" ToolTip="Selecciona otra versión o introduce una letra manual" />
+     <Button Content="Cancelar" Command="{Binding CancelLyricsCommand}" AutomationProperties.AutomationId="CancelLyrics" Margin="0,0,0,6">
+      <Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Style.Triggers><Trigger Property="IsEnabled" Value="False"><Setter Property="Visibility" Value="Collapsed" /></Trigger></Style.Triggers></Style></Button.Style>
+     </Button>
+    </WrapPanel>
    </StackPanel>
   </Border>
-  <WrapPanel Grid.Row="2" Margin="0,0,0,12">
-   <Button Content="Buscar letra" Command="{Binding SearchLyricsCommand}" AutomationProperties.AutomationId="SearchLyrics" Padding="14,7" Margin="0,0,8,0" />
-   <Button Content="Cancelar" Command="{Binding CancelLyricsCommand}" AutomationProperties.AutomationId="CancelLyrics" Padding="14,7" />
-  </WrapPanel>
-  <TabControl Grid.Row="3" Background="#171B29" BorderThickness="0" Padding="0">
-   <TabItem Header="Traducción" AutomationProperties.AutomationId="TranslationTab">
-    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-     <StackPanel Margin="20,28">
-      <TextBlock Text="Letra original" FontSize="20" FontWeight="SemiBold" />
-      <TextBlock Text="{Binding DetectionMessage}" FontSize="13" Foreground="{StaticResource Muted}" Margin="0,12,0,0" />
-      <TextBlock Text="{Binding LyricsMessage}" FontSize="14" Foreground="#C8BDFF" Margin="0,12,0,0" />
-      <TextBlock Text="{Binding OriginalLyrics}" Margin="0,16,0,0" />
-     </StackPanel>
-    </ScrollViewer>
+  <TabControl x:Name="ReadingTabs" Grid.Row="2">
+   <TabItem Header="Letra" AutomationProperties.AutomationId="TranslationTab">
+    <Grid x:Name="ReadingGrid">
+     <Grid.RowDefinitions><RowDefinition /><RowDefinition x:Name="TranslationRow" Height="0" /></Grid.RowDefinitions>
+     <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition x:Name="TranslationColumn" /></Grid.ColumnDefinitions>
+     <Border Background="{StaticResource Surface}" CornerRadius="10" Padding="20" BorderBrush="{StaticResource Outline}" BorderThickness="1">
+      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel>
+       <TextBlock Text="Letra original" FontSize="13" Foreground="{StaticResource Gold}" />
+       <TextBlock Text="{Binding LyricsSource}" FontSize="11" Foreground="{StaticResource Muted}" Margin="0,6,0,0" />
+       <TextBlock Text="{Binding DetectionMessage}" FontSize="13" Foreground="{StaticResource Muted}" Margin="0,14,0,0">
+        <TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}"><Style.Triggers><DataTrigger Binding="{Binding HasPreparedLyrics}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+       </TextBlock>
+       <TextBlock Text="{Binding LyricsMessage}" FontSize="12" Foreground="{StaticResource Gold}" Margin="0,10,0,0" />
+       <TextBlock Text="{Binding OriginalLyrics}" FontFamily="Georgia" FontSize="19" LineHeight="30" Margin="0,20,0,0" />
+      </StackPanel></ScrollViewer>
+     </Border>
+     <Border x:Name="TranslationPreview" Grid.Column="1" Margin="14,0,0,0" Background="{StaticResource Surface}" CornerRadius="10" Padding="20" BorderBrush="{StaticResource Outline}" BorderThickness="1">
+      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel>
+       <TextBlock Text="Español" FontSize="13" Foreground="{StaticResource Gold}" />
+       <TextBlock Text="{Binding TranslationMessage}" Foreground="{StaticResource Muted}" FontSize="13" Margin="0,16,0,0" />
+       <TextBlock Text="{Binding TranslatedLyrics}" FontFamily="Georgia" FontSize="19" LineHeight="30" Margin="0,20,0,0" />
+      </StackPanel></ScrollViewer>
+     </Border>
+    </Grid>
    </TabItem>
    <TabItem Header="Significado" AutomationProperties.AutomationId="MeaningTab">
-    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-     <StackPanel Margin="20,28">
-      <TextBlock Text="Más allá de las palabras" FontSize="20" FontWeight="SemiBold" />
-      <TextBlock Text="Aquí aparecerán el resumen, los temas y las posibles interpretaciones de la canción." Foreground="{StaticResource Muted}" Margin="0,12,0,0" />
-      <TextBlock Text="Todavía no se ha analizado ninguna letra." FontSize="13" Foreground="{StaticResource Muted}" Margin="0,24,0,0" />
-     </StackPanel>
-    </ScrollViewer>
+    <Border Background="{StaticResource Surface}" CornerRadius="10" Padding="24" BorderBrush="{StaticResource Outline}" BorderThickness="1">
+     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel>
+      <TextBlock Text="Más allá de las palabras" FontFamily="Georgia" FontSize="28" Foreground="{StaticResource Gold}" />
+      <TextBlock Text="Una mirada a lo que cuenta la canción: sus temas, metáforas y posibles interpretaciones." Foreground="{StaticResource Muted}" FontSize="15" Margin="0,16,0,0" />
+      <TextBlock Text="Interpretación generada por IA" Foreground="{StaticResource Gold}" FontSize="13" Margin="0,18,0,0" />
+      <TextBlock Text="Confirma una letra y pulsa Traducir y explicar para obtener el significado." Foreground="{StaticResource Muted}" Margin="0,18,0,0">
+       <TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}"><Style.Triggers><DataTrigger Binding="{Binding HasInsight}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+      </TextBlock>
+      <StackPanel>
+       <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding HasInsight}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+      <TextBlock Text="{Binding InsightSummary}" FontSize="16" Margin="0,18,0,0" />
+      <TextBlock Text="Temas" Foreground="{StaticResource Gold}" Margin="0,18,0,8" /><TextBlock Text="{Binding InsightThemes}" />
+      <TextBlock Text="Metáforas" Foreground="{StaticResource Gold}" Margin="0,18,0,8" /><TextBlock Text="{Binding InsightMetaphors}" />
+      <TextBlock Text="Otras interpretaciones" Foreground="{StaticResource Gold}" Margin="0,18,0,8" /><TextBlock Text="{Binding InsightAlternatives}" />
+      <TextBlock Text="Ambigüedades y avisos" Foreground="{StaticResource Gold}" Margin="0,18,0,8" /><TextBlock Text="{Binding InsightWarnings}" />
+      </StackPanel>
+     </StackPanel></ScrollViewer>
+    </Border>
    </TabItem>
   </TabControl>
-  <StackPanel Grid.Row="4" Margin="0,14,0,0">
-   <TextBlock Text="{Binding StorageMessage}" Foreground="{StaticResource Muted}" FontSize="12" />
-   <Button Content="Reintentar almacenamiento" Command="{Binding RetryStorageCommand}" HorizontalAlignment="Left" Padding="10,6" Margin="0,8,0,0">
-    <Button.Style><Style TargetType="Button">
-     <Setter Property="Visibility" Value="Collapsed" />
-     <Style.Triggers><DataTrigger Binding="{Binding StorageError}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
-    </Style></Button.Style>
+  <StackPanel Grid.Row="3" Margin="0,14,0,0">
+   <TextBlock Text="{Binding InsightMessage}" Foreground="{StaticResource Gold}" FontSize="12" Margin="0,0,0,8" />
+   <Button Content="Ajustes de IA" Click="OpenAiSettings" HorizontalAlignment="Right" Padding="12,6" Margin="0,0,0,8"/>
+   <TextBlock Text="{Binding AiConfigurationStatus}" Foreground="{StaticResource Muted}" FontSize="11" Margin="0,0,0,4"/>
+   <TextBlock Text="{Binding StorageMessage}" Foreground="{StaticResource Muted}" FontSize="11" />
+   <Button Content="Reintentar almacenamiento" Command="{Binding RetryStorageCommand}" HorizontalAlignment="Left" Margin="0,8,0,0">
+    <Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding StorageError}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></Button.Style>
    </Button>
   </StackPanel>
  </Grid>
+ </ScrollViewer>
 </Window>

@@ -20,12 +20,15 @@ public enum LyricsOrigin { Lrclib, Manual }
 public sealed record ResolvedLyrics(long TrackRevision, string Text,
     LyricsOrigin Origin, long? LrclibId, bool IsInstrumental);
 
-public sealed record TranslatedLine(int Id, string Text);
+public sealed record TranslatedLine(int Id, string Text, string? SourceLanguage = null);
 public sealed record ExplainedMetaphor(string Text, string Explanation);
 public sealed record SongInsight(long TrackRevision, string Language,
     IReadOnlyList<TranslatedLine> Translation, string Summary,
     IReadOnlyList<string> Themes, IReadOnlyList<ExplainedMetaphor> Metaphors,
-    IReadOnlyList<string> Alternatives, IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Alternatives, IReadOnlyList<string> Warnings)
+{
+    public long LyricsRevision { get; init; }
+}
 
 public sealed record AppSettings(bool AiEnabled = false, string? Model = null,
     int DailyRequestLimit = 20);

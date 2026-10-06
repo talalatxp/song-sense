@@ -4,6 +4,7 @@
 .idea/
 TestResults/
 artifacts/
+work/
 *.db
 *.db-shm
 *.db-wal
@@ -12,3 +13,16 @@ artifacts/
 *.suo
 .env*
 !.env.example
+
+# Local credentials, exports and diagnostic artifacts must never enter Git.
+*.dpapi
+*.dpapi.*.tmp
+*.key
+*.pem
+*.pfx
+*.p12
+credentials*.json
+secrets*.json
+appsettings.Local.json
+*.dmp
+*.lnk

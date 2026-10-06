@@ -1,0 +1,37 @@
+<Window x:Class="SongSense.App.AiSettingsWindow"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ Title="Ajustes de IA · Song Sense" Width="600" Height="780" MinWidth="360" MinHeight="480" WindowStartupLocation="CenterOwner"
+ Background="{StaticResource Canvas}" Foreground="{StaticResource Ink}" FontFamily="Segoe UI" Icon="pack://application:,,,/Assets/SongSense.ico">
+ <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+  <StackPanel Margin="24">
+   <TextBlock Text="Ajustes de IA" FontFamily="Georgia" FontSize="28" Foreground="{StaticResource Gold}"/>
+   <TextBlock Text="La clave se guarda cifrada para tu usuario de Windows, fuera del repositorio. Nunca se muestra la clave guardada." Foreground="{StaticResource Muted}" Margin="0,12,0,16"/>
+   <StackPanel IsEnabled="{Binding CanManage}">
+    <TextBlock Text="Clave OpenAI · nueva o de reemplazo" FontSize="13"/>
+    <PasswordBox x:Name="KeyInput" Padding="12" Margin="0,8,0,6" Background="{StaticResource Surface}" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource Outline}" CaretBrush="{StaticResource Gold}" AutomationProperties.Name="Clave OpenAI"/>
+    <TextBlock Text="{Binding KeyStatus}" Foreground="{StaticResource Muted}" FontSize="12"/>
+    <Button Content="Eliminar clave y desactivar IA" Click="DeleteKey" HorizontalAlignment="Left" Margin="0,10,0,18"/>
+    <TextBlock Text="ID del modelo (sin selección automática)" FontSize="13"/>
+    <TextBox Text="{Binding Model, UpdateSourceTrigger=PropertyChanged}" Margin="0,8,0,16" AutomationProperties.Name="ID del modelo"/>
+    <TextBlock Text="Límite diario · entero de 1 a 100" FontSize="13"/>
+    <TextBox Text="{Binding Limit, UpdateSourceTrigger=PropertyChanged}" Margin="0,8,0,16" AutomationProperties.Name="Límite diario"/>
+    <Border Background="{StaticResource Surface}" Padding="14" CornerRadius="8" Margin="0,0,0,14">
+     <StackPanel>
+      <TextBlock Text="Antes de activar IA" Foreground="{StaticResource Gold}" FontWeight="SemiBold"/>
+      <TextBlock Text="Las pruebas y los análisis se envían a OpenAI y pueden generar costes según el modelo y los tokens. El límite cuenta solicitudes; no es un presupuesto en euros. La prueba envía solo un texto fijo de conexión, sin canción ni letra. Traducir y explicar envía la letra confirmada. Se usa store: false; esto no garantiza retención cero del proveedor. Los errores y cancelaciones tras reservar cuentan. No hay reintentos automáticos." FontSize="13" Margin="0,8,0,12"/>
+      <CheckBox IsChecked="{Binding NoticeAccepted}" Foreground="{StaticResource Ink}"><TextBlock Text="He leído el aviso de envío de datos y coste" FontSize="13"/></CheckBox>
+     </StackPanel>
+    </Border>
+    <CheckBox Content="Activar IA" IsChecked="{Binding AiEnabled}" Foreground="{StaticResource Ink}" Margin="0,0,0,16"/>
+    <WrapPanel>
+     <Button Content="Guardar ajustes" Style="{StaticResource PrimaryButton}" Click="SaveSettings" Margin="0,0,10,10"/>
+     <Button Content="Probar conexión · de pago" Click="TestConnection" Margin="0,0,0,10" ToolTip="Usa solo los ajustes guardados. Consume una solicitud del límite diario y puede generar coste."/>
+    </WrapPanel>
+   </StackPanel>
+   <Button Content="Cancelar operación" Click="CancelOperation" IsEnabled="{Binding CanCancel}" HorizontalAlignment="Left" Margin="0,0,0,12"/>
+   <TextBlock Text="{Binding CountLabel}" Foreground="{StaticResource Muted}" FontSize="12"/>
+   <TextBlock Text="{Binding Message}" Foreground="{StaticResource Gold}" Margin="0,12,0,0"/>
+  </StackPanel>
+ </ScrollViewer>
+</Window>

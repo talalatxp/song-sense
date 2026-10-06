@@ -4,7 +4,7 @@ using SongSense.Core;
 
 namespace SongSense.Infrastructure;
 
-public sealed class SqliteSettingsStore(string databasePath) : ISettingsStore
+public sealed class SqliteSettingsStore(string databasePath) : ISettingsStore, IRequestBudget
 {
     public const int SchemaVersion = 1;
     public static string DefaultDatabasePath => Path.Combine(
@@ -67,6 +67,7 @@ public sealed class SqliteSettingsStore(string databasePath) : ISettingsStore
     {
         if (settings.DailyRequestLimit is < 1 or > 100)
             throw new ArgumentOutOfRangeException(nameof(settings), "El límite diario debe estar entre 1 y 100.");
+        AiSettingsRules.Validate(settings);
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken);
         using var command = connection.CreateCommand();
@@ -86,5 +87,28 @@ public sealed class SqliteSettingsStore(string databasePath) : ISettingsStore
         command.CommandText = "SELECT request_count FROM daily_request_counts WHERE local_date = $date;";
         command.Parameters.AddWithValue("$date", localDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture);
+    }
+
+    public async Task<bool> TryReserveRequestAsync(DateOnly localDate, CancellationToken cancellationToken = default)
+    {
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+        using var transaction = connection.BeginTransaction(deferred: false);
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        // One atomic statement arbitrates even across application processes. The saved
+        // limit and enabled flag are checked at reservation time, never from a stale UI.
+        command.CommandText = """
+            INSERT INTO daily_request_counts (local_date, request_count)
+            SELECT $date, 1 FROM app_settings WHERE id = 1 AND ai_enabled = 1
+            ON CONFLICT(local_date) DO UPDATE SET request_count = request_count + 1
+            WHERE request_count < (SELECT daily_request_limit FROM app_settings WHERE id = 1 AND ai_enabled = 1)
+            RETURNING request_count;
+            """;
+        command.Parameters.AddWithValue("$date", localDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        var reserved = await command.ExecuteScalarAsync(cancellationToken) is not null;
+        cancellationToken.ThrowIfCancellationRequested();
+        transaction.Commit();
+        return reserved;
     }
 }

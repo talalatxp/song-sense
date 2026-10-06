@@ -1,6 +1,6 @@
 # Ruta de desarrollo — Letras en español para Spotify en Windows
 
-Fecha: 5 de octubre de 2026. Estado: F01–F02 cerradas; F03 en curso; F04–F10 pendientes. Evidencia en [ESTADO_FEATURES.md](ESTADO_FEATURES.md).
+Fecha: 6 de octubre de 2026. Estado: F01–F04 cerradas; F05 y F06 implementadas, pendientes de validación real de OpenAI; F07–F10 pendientes. Evidencia en [ESTADO_FEATURES.md](ESTADO_FEATURES.md).
 Nombre del proyecto: **SongSense**. Repositorio: `song-sense`.
 
 ## Objetivo y alcance de la primera versión
@@ -29,7 +29,7 @@ La ruta se ejecuta en orden, una feature por petición. Solicitar una feature au
 
 La elección de LRCLIB no acredita derechos adicionales sobre las letras: la documentación consultada confirma acceso técnico gratuito, pero no establece expresamente permiso para traducción o procesamiento con IA. Esa incertidumbre sigue abierta y no se describirá el producto como una integración con licencias verificadas. El alcance es un prototipo personal, sin distribución pública del catálogo. No se añadirá una pantalla que afirme que aceptar un aviso resuelve los derechos.
 
-La IA requiere una clave con acceso y facturación para la API. La aplicación informa antes de activarla de que enviará título, artista y letra al proveedor y de que las solicitudes pueden tener coste. Crear esta ruta no realiza llamadas de pago.
+La IA requiere una clave con acceso y facturación para la API. La aplicación informa antes de activarla de que enviará la letra confirmada al proveedor y de que las solicitudes pueden tener coste. La implementación de F06 evita enviar título, artista y álbum. Crear esta ruta no realiza llamadas de pago.
 
 ## Contrato transversal
 
@@ -69,7 +69,7 @@ Todas las features dependen del cierre de la inmediatamente anterior. Hasta F08,
 
 - Solución con proyectos App (WPF), Core (contratos y reglas), Infrastructure (Windows, HTTP y SQLite) y Tests.
 - Configuración de compilación reproducible con versión del SDK registrada y versiones de dependencias fijadas.
-- Ventana oscura de 480 × 720 píxeles independientes de DPI; mínimo 360 × 480; título, artista, estado y las dos pestañas.
+- Ventana oscura inicialmente de 480 × 720 DIP, ampliada a 860 × 780 DIP por la decisión visual del 6 de octubre de 2026; mínimo 360 × 480 conservado. Identidad dorada con dos claves de sol y layout adaptable, según `docs/DISENO.md`.
 - Contratos `CurrentTrack`, `LyricsCandidate`, `ResolvedLyrics` y `SongInsight`; interfaces de detección, letras, IA y persistencia.
 - Inicialización de SQLite con versión de esquema y migraciones. No tablas de contenido hasta F07; sí configuración y contador de solicitudes necesarios en F05.
 - README con requisitos y comandos de compilación, ejecución y pruebas; documento de estado por feature.
