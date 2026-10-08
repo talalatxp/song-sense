@@ -28,6 +28,9 @@ public sealed record SongInsight(long TrackRevision, string Language,
     IReadOnlyList<string> Alternatives, IReadOnlyList<string> Warnings)
 {
     public long LyricsRevision { get; init; }
+    public string? Model { get; init; }
+    public string? PromptVersion { get; init; }
+    public AiUsage? Usage { get; init; }
 }
 
 public sealed record AppSettings(bool AiEnabled = false, string? Model = null,
@@ -58,4 +61,10 @@ public interface ISettingsStore
     Task<AppSettings> ReadSettingsAsync(CancellationToken cancellationToken = default);
     Task SaveSettingsAsync(AppSettings settings, CancellationToken cancellationToken = default);
     Task<int> ReadRequestCountAsync(DateOnly localDate, CancellationToken cancellationToken = default);
+}
+
+public interface IAutomaticUpdateSettings
+{
+    Task<bool> ReadAutomaticUpdatesAsync(CancellationToken token = default);
+    Task SaveAutomaticUpdatesAsync(bool enabled, CancellationToken token = default);
 }

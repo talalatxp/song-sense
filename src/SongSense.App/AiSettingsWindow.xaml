@@ -19,7 +19,7 @@
     <Border Background="{StaticResource Surface}" Padding="14" CornerRadius="8" Margin="0,0,0,14">
      <StackPanel>
       <TextBlock Text="Antes de activar IA" Foreground="{StaticResource Gold}" FontWeight="SemiBold"/>
-      <TextBlock Text="Las pruebas y los análisis se envían a OpenAI y pueden generar costes según el modelo y los tokens. El límite cuenta solicitudes; no es un presupuesto en euros. La prueba envía solo un texto fijo de conexión, sin canción ni letra. Traducir y explicar envía la letra confirmada. Se usa store: false; esto no garantiza retención cero del proveedor. Los errores y cancelaciones tras reservar cuentan. No hay reintentos automáticos." FontSize="13" Margin="0,8,0,12"/>
+      <TextBlock Text="Las pruebas y los análisis se envían a OpenAI y pueden generar costes según el modelo y los tokens. El límite cuenta solicitudes; no es un presupuesto en euros. La prueba envía solo un texto fijo de conexión, sin canción ni letra. Traducir y explicar envía la letra confirmada. Se usa store: false; esto no garantiza retención cero del proveedor. Los errores y cancelaciones tras reservar cuentan. No hay reintentos automáticos. La caché guarda letras, selecciones y resultados en texto legible en la base local de SongSense, fuera del repositorio. Borrar caché no elimina la clave ni el contador." FontSize="13" Margin="0,8,0,12"/>
       <CheckBox IsChecked="{Binding NoticeAccepted}" Foreground="{StaticResource Ink}"><TextBlock Text="He leído el aviso de envío de datos y coste" FontSize="13"/></CheckBox>
      </StackPanel>
     </Border>

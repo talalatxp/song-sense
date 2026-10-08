@@ -28,6 +28,43 @@ public sealed class InsightTests
     private static string Envelope(string json) => JsonSerializer.Serialize(new { status = "completed", output = new[] { new { type = "message", status = "completed", content = new[] { new { type = "output_text", text = json } } } } });
     private static CurrentTrack Track(long revision = 1) => new(revision, "Private title", "Private artist", "Private album", null, PlaybackState.Playing);
 
+    [Theory]
+    [InlineData("{\"input_tokens\":12,\"output_tokens\":8,\"total_tokens\":20}", true)]
+    [InlineData("null", false)]
+    [InlineData("{}", false)]
+    [InlineData("{\"input_tokens\":\"12\",\"output_tokens\":8,\"total_tokens\":20}", false)]
+    [InlineData("{\"input_tokens\":-1,\"output_tokens\":8,\"total_tokens\":7}", false)]
+    [InlineData("{\"input_tokens\":12,\"output_tokens\":8,\"total_tokens\":21}", false)]
+    public async Task UsageIsProviderReportedOrUnknownNeverInvented(string usage, bool valid)
+    {
+        var root = JsonNode.Parse(Envelope(Json()))!; root["usage"] = JsonNode.Parse(usage);
+        using var http = new HttpClient(new Handler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(root.ToJsonString()) })));
+        var response = await new OpenAiResponsesClient(http).SendWithUsageAsync("test-only", new { }, CancellationToken.None);
+        Assert.Equal(Json(), response.Text);
+        if (valid) Assert.Equal(new AiUsage(12, 8, 20), response.Usage); else Assert.Null(response.Usage);
+    }
+
+    [Fact]
+    public async Task IncompleteAndInvalidInsightsStillExposeCommunicatedTokens()
+    {
+        using var http = new HttpClient(new Handler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        { Content = new StringContent("{\"status\":\"incomplete\",\"output\":[],\"usage\":{\"input_tokens\":10,\"output_tokens\":4,\"total_tokens\":14}}") })));
+        var error = await Assert.ThrowsAsync<AiException>(() => new OpenAiResponsesClient(http).SendWithUsageAsync("test-only", new { }, CancellationToken.None));
+        Assert.Equal(AiFailure.Incomplete, error.Failure); Assert.Equal(new AiUsage(10, 4, 14), error.Usage);
+        var vm = ReadyVm(new InsightProvider((_, _, _) => Task.FromException<SongInsight>(new AiException(AiFailure.InvalidResponse) { Usage = new AiUsage(10, 4, 14) })));
+        await vm.GenerateInsightAsync(); Assert.Null(vm.Insight); Assert.Contains("14", vm.UsageMessage);
+    }
+
+    [Fact]
+    public async Task EachQueryDisplaysItsOwnTokensAndUnknownIsNotZero()
+    {
+        var calls = 0;
+        var vm = ReadyVm(new InsightProvider((_, _, _) => Task.FromResult(InsightValidation.Parse(1, Lyrics, Json()) with
+        { Usage = ++calls == 1 ? new AiUsage(100, 50, 150) : null })));
+        await vm.GenerateInsightAsync(); Assert.Contains("150", vm.UsageMessage);
+        await vm.RegenerateInsightAsync(); Assert.Contains("no comunicado", vm.UsageMessage); Assert.DoesNotContain("150", vm.UsageMessage);
+    }
+
     [Fact]
     public void EnglishPreservesBlankStanzasRepetitionAndRevision()
     {

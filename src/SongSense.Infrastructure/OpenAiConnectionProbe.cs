@@ -6,8 +6,9 @@ namespace SongSense.Infrastructure;
 public sealed class OpenAiConnectionProbe(HttpClient http)
 {
     private readonly OpenAiResponsesClient client = new(http);
-    public async Task SendAsync(string model, string key, CancellationToken cancellationToken)
+    public async Task<AiUsage?> SendAsync(string model, string key, CancellationToken cancellationToken)
     {
+        AiUsage? usage = null;
         var payload = new
         {
             model,
@@ -21,15 +22,17 @@ public sealed class OpenAiConnectionProbe(HttpClient http)
         };
         try
         {
-            var json = await client.SendAsync(key, payload, cancellationToken, 131_072);
-            using var result = JsonDocument.Parse(json);
+            var response = await client.SendWithUsageAsync(key, payload, cancellationToken, 131_072);
+            usage = response.Usage;
+            using var result = JsonDocument.Parse(response.Text);
             if (result.RootElement.ValueKind != JsonValueKind.Object || result.RootElement.EnumerateObject().Count() != 1 ||
                 result.RootElement.GetProperty("ok").ValueKind != JsonValueKind.True)
                 throw new AiException(AiFailure.InvalidResponse);
+            return usage;
         }
-        catch (AiException error) when (error.Failure is AiFailure.Refused or AiFailure.Incomplete) { throw new AiException(AiFailure.InvalidResponse); }
-        catch (JsonException) { throw new AiException(AiFailure.InvalidResponse); }
-        catch (InvalidOperationException) { throw new AiException(AiFailure.InvalidResponse); }
-        catch (KeyNotFoundException) { throw new AiException(AiFailure.InvalidResponse); }
+        catch (AiException error) { throw new AiException(error.Failure is AiFailure.Refused or AiFailure.Incomplete ? AiFailure.InvalidResponse : error.Failure) { Usage = error.Usage ?? usage }; }
+        catch (JsonException) { throw new AiException(AiFailure.InvalidResponse) { Usage = usage }; }
+        catch (InvalidOperationException) { throw new AiException(AiFailure.InvalidResponse) { Usage = usage }; }
+        catch (KeyNotFoundException) { throw new AiException(AiFailure.InvalidResponse) { Usage = usage }; }
     }
 }

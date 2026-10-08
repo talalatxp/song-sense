@@ -33,6 +33,10 @@
      </Button>
      <Button Content="Buscar letra" Style="{StaticResource PrimaryButton}" Command="{Binding SearchLyricsCommand}" AutomationProperties.AutomationId="SearchLyrics" Margin="0,0,8,6" ToolTip="Busca la letra de esta canción en LRCLIB" />
      <Button Content="Cambiar letra" Click="ChangeLyrics" IsEnabled="{Binding CanEditLyrics}" Margin="0,0,8,6" ToolTip="Selecciona otra versión o introduce una letra manual" />
+     <Button Content="Regenerar" Command="{Binding RegenerateCommand}" Margin="0,0,8,6" ToolTip="Una nueva solicitud de pago explícita; reemplaza el resultado al completarse." />
+     <Button Content="Usar letra guardada" Command="{Binding ConfirmCachedLyricsCommand}" Margin="0,0,8,6">
+      <Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Style.Triggers><Trigger Property="IsEnabled" Value="False"><Setter Property="Visibility" Value="Collapsed"/></Trigger></Style.Triggers></Style></Button.Style>
+     </Button>
      <Button Content="Cancelar" Command="{Binding CancelLyricsCommand}" AutomationProperties.AutomationId="CancelLyrics" Margin="0,0,0,6">
       <Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Style.Triggers><Trigger Property="IsEnabled" Value="False"><Setter Property="Visibility" Value="Collapsed" /></Trigger></Style.Triggers></Style></Button.Style>
      </Button>
@@ -86,10 +90,24 @@
    </TabItem>
   </TabControl>
   <StackPanel Grid.Row="3" Margin="0,14,0,0">
-   <TextBlock Text="{Binding InsightMessage}" Foreground="{StaticResource Gold}" FontSize="12" Margin="0,0,0,8" />
-   <Button Content="Ajustes de IA" Click="OpenAiSettings" HorizontalAlignment="Right" Padding="12,6" Margin="0,0,0,8"/>
+   <WrapPanel Margin="0,0,0,6">
+    <CheckBox Content="Actualizar automáticamente" Foreground="{StaticResource Muted}" IsChecked="{Binding AutomaticUpdatesEnabled}" VerticalAlignment="Center" Margin="0,0,12,8" ToolTip="Busca la letra tras 1,5 segundos de estabilidad. La IA solo se consulta cuando su modo, configuración y límites lo permiten."/>
+    <Button Content="Reintentar flujo" Command="{Binding RetryAutomaticCommand}" Margin="0,0,0,8"/>
+   </WrapPanel>
+   <TextBlock Text="{Binding AutomaticMessage}" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,0,0,8"/>
+   <TextBlock Text="{Binding CacheMessage}" Foreground="{StaticResource Gold}" FontSize="12" Margin="0,0,0,8">
+    <TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}"><Style.Triggers><Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed"/></Trigger></Style.Triggers></Style></TextBlock.Style>
+   </TextBlock>
+   <WrapPanel><Button Content="Borrar esta canción" Command="{Binding DeleteSongCommand}" Margin="0,0,8,8"/><Button Content="Borrar caché" Command="{Binding ClearCacheCommand}" Margin="0,0,8,8"/><Button Content="Cuenta y consumo" Click="OpenConnection" Margin="0,0,0,8"/></WrapPanel>
+   <TextBlock Text="{Binding InsightMessage}" Foreground="{StaticResource Gold}" FontSize="12" Margin="0,0,0,8">
+    <TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}"><Style.Triggers><Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed"/></Trigger></Style.Triggers></Style></TextBlock.Style>
+   </TextBlock>
+   <TextBlock Text="{Binding UsageMessage}" Foreground="{StaticResource Gold}" FontSize="12" Margin="0,0,0,8" AutomationProperties.Name="Consumo de la consulta de IA"/>
    <TextBlock Text="{Binding AiConfigurationStatus}" Foreground="{StaticResource Muted}" FontSize="11" Margin="0,0,0,4"/>
    <TextBlock Text="{Binding StorageMessage}" Foreground="{StaticResource Muted}" FontSize="11" />
+   <Button Content="Recuperar base local" Click="RecoverStorage" HorizontalAlignment="Left" Margin="0,8,0,0">
+    <Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding CanRecoverStorage}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Button.Style>
+   </Button>
    <Button Content="Reintentar almacenamiento" Command="{Binding RetryStorageCommand}" HorizontalAlignment="Left" Margin="0,8,0,0">
     <Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding StorageError}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></Button.Style>
    </Button>

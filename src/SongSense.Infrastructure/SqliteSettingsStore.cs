@@ -4,9 +4,11 @@ using SongSense.Core;
 
 namespace SongSense.Infrastructure;
 
-public sealed class SqliteSettingsStore(string databasePath) : ISettingsStore, IRequestBudget
+public sealed class SqliteSettingsStore(string databasePath) : ISettingsStore, IRequestBudget, IRecoverableSettingsStore, IAutomaticUpdateSettings
 {
-    public const int SchemaVersion = 1;
+    public bool CanRecover { get; private set; }
+    public string RecoveryMessage { get; private set; } = "";
+    public const int SchemaVersion = 3;
     public static string DefaultDatabasePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SongSense", "songsense.db");
 
@@ -20,9 +22,25 @@ public sealed class SqliteSettingsStore(string databasePath) : ISettingsStore, I
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
+        CanRecover = false;
+        try { await InitializeCoreAsync(cancellationToken); }
+        catch (SqliteException error) when (error.SqliteErrorCode is 11 or 26)
+        {
+            CanRecover = true; RecoveryMessage = "Base local corrupta. Recupera explícitamente conservando una copia del original.";
+            throw new InvalidOperationException(RecoveryMessage);
+        }
+    }
+    private async Task InitializeCoreAsync(CancellationToken cancellationToken)
+    {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(databasePath))!);
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken);
+        using (var check = connection.CreateCommand())
+        {
+            check.CommandText = "PRAGMA quick_check;";
+            if (await check.ExecuteScalarAsync(cancellationToken) as string != "ok")
+            { CanRecover = true; RecoveryMessage = "La base no supera la comprobación de integridad. Recupera conservando el original."; throw new InvalidOperationException(RecoveryMessage); }
+        }
         using var transaction = connection.BeginTransaction();
         using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -48,7 +66,85 @@ public sealed class SqliteSettingsStore(string databasePath) : ISettingsStore, I
                 """;
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
+        if (version < 2)
+        {
+            command.CommandText = """
+                CREATE TABLE song_cache (
+                    signature TEXT PRIMARY KEY, lyrics TEXT NULL, origin INTEGER NULL,
+                    lrclib_id INTEGER NULL, instrumental INTEGER NOT NULL,
+                    expires_at INTEGER NOT NULL, last_access INTEGER NOT NULL
+                );
+                CREATE TABLE insight_cache (cache_key TEXT PRIMARY KEY, json TEXT NOT NULL, created_at INTEGER NOT NULL);
+                CREATE TABLE song_insights (
+                    signature TEXT NOT NULL REFERENCES song_cache(signature) ON DELETE CASCADE,
+                    cache_key TEXT NOT NULL REFERENCES insight_cache(cache_key) ON DELETE CASCADE,
+                    PRIMARY KEY(signature, cache_key)
+                );
+                CREATE INDEX ix_song_insights_key ON song_insights(cache_key);
+                CREATE INDEX ix_song_cache_access ON song_cache(last_access);
+                PRAGMA user_version = 2;
+                """;
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        if (version < 3)
+        {
+            command.CommandText = "ALTER TABLE app_settings ADD COLUMN automatic_updates INTEGER NOT NULL DEFAULT 1 CHECK(automatic_updates IN (0,1)); PRAGMA user_version = 3;";
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
         transaction.Commit();
+    }
+
+    public async Task RecoverAsync(CancellationToken token = default)
+    {
+        if (!CanRecover) throw new InvalidOperationException("La base no necesita recuperación.");
+        var fullPath = Path.GetFullPath(databasePath);
+        var directory = Path.Combine(Path.GetDirectoryName(fullPath)!, "recovery-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        var settings = new AppSettings();
+        var counts = new List<(string Date, int Count)>();
+        var readCounts = false;
+        try
+        {
+            settings = (await ReadSettingsAsync(token)) with { AiEnabled = false };
+            await using var source = CreateConnection(); await source.OpenAsync(token);
+            using var read = source.CreateCommand(); read.CommandText = "SELECT local_date,request_count FROM daily_request_counts;";
+            using var reader = await read.ExecuteReaderAsync(token);
+            while (await reader.ReadAsync(token)) counts.Add((reader.GetString(0), reader.GetInt32(1)));
+            readCounts = true;
+        }
+        catch (SqliteException) { }
+        catch (InvalidOperationException) { }
+        var replacementPath = Path.Combine(directory, "replacement.db");
+        var replacement = new SqliteSettingsStore(replacementPath);
+        await replacement.InitializeAsync(token); await replacement.SaveSettingsAsync(settings, token);
+        await using (var target = replacement.CreateConnection())
+        {
+            await target.OpenAsync(token);
+            using var transaction = target.BeginTransaction();
+            if (!readCounts) counts = [(DateOnly.FromDateTime(DateTime.Now).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), 100)];
+            foreach (var (date, count) in counts)
+            {
+                using var write = target.CreateCommand(); write.Transaction = transaction;
+                write.CommandText = "INSERT INTO daily_request_counts VALUES ($date,$count);";
+                write.Parameters.AddWithValue("$date", date); write.Parameters.AddWithValue("$count", count);
+                await write.ExecuteNonQueryAsync(token);
+            }
+            token.ThrowIfCancellationRequested(); transaction.Commit();
+        }
+        // Refuse if another instance holds the file. Originals and sidecars are
+        // preserved locally before any replacement; no automatic recovery or deletion.
+        using (var original = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.None))
+        using (var backup = new FileStream(Path.Combine(directory, "original.db"), FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            await original.CopyToAsync(backup, token);
+        foreach (var suffix in new[] { "-wal", "-shm", "-journal" })
+            if (File.Exists(fullPath + suffix)) File.Copy(fullPath + suffix, Path.Combine(directory, "original.db" + suffix));
+        token.ThrowIfCancellationRequested();
+        foreach (var suffix in new[] { "-wal", "-shm", "-journal" })
+            if (File.Exists(fullPath + suffix)) File.Move(fullPath + suffix, Path.Combine(directory, "retained.db" + suffix));
+        File.Replace(replacementPath, fullPath, Path.Combine(directory, "retained.db"));
+        CanRecover = false;
+        RecoveryMessage = $"Base recuperada. Original conservado en {directory}. IA desactivada. " +
+            (readCounts ? "Contadores conservados." : "Contadores ilegibles conservados en el original; solicitudes bloqueadas hoy.");
     }
 
     public async Task<AppSettings> ReadSettingsAsync(CancellationToken cancellationToken = default)
@@ -61,6 +157,23 @@ public sealed class SqliteSettingsStore(string databasePath) : ISettingsStore, I
         if (!await reader.ReadAsync(cancellationToken))
             throw new InvalidOperationException("Falta la configuración inicial. Revisa la base local antes de continuar.");
         return new AppSettings(reader.GetBoolean(0), reader.IsDBNull(1) ? null : reader.GetString(1), reader.GetInt32(2));
+    }
+
+    public async Task<bool> ReadAutomaticUpdatesAsync(CancellationToken token = default)
+    {
+        await using var connection = CreateConnection(); await connection.OpenAsync(token);
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT automatic_updates FROM app_settings WHERE id=1;";
+        var value = await command.ExecuteScalarAsync(token) ?? throw new InvalidOperationException("Falta la configuración automática.");
+        return Convert.ToInt32(value, CultureInfo.InvariantCulture) == 1;
+    }
+    public async Task SaveAutomaticUpdatesAsync(bool enabled, CancellationToken token = default)
+    {
+        await using var connection = CreateConnection(); await connection.OpenAsync(token);
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE app_settings SET automatic_updates=$enabled WHERE id=1;";
+        command.Parameters.AddWithValue("$enabled", enabled ? 1 : 0);
+        if (await command.ExecuteNonQueryAsync(token) != 1) throw new InvalidOperationException("Falta la configuración automática.");
     }
 
     public async Task SaveSettingsAsync(AppSettings settings, CancellationToken cancellationToken = default)

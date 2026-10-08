@@ -4,7 +4,8 @@ using SongSense.Core;
 namespace SongSense.Infrastructure;
 
 public sealed class AiConfigurationService(ISettingsStore settings, ISecretStore secrets, IRequestBudget budget,
-    OpenAiConnectionProbe probe, TimeProvider? timeProvider = null, string? operationLockPath = null)
+    OpenAiConnectionProbe probe, TimeProvider? timeProvider = null, string? operationLockPath = null,
+    Func<CancellationToken, Task<bool>>? allowPaidRequests = null, Func<CancellationToken>? authorizationCancellation = null)
 {
     private readonly SemaphoreSlim operation = new(1, 1);
     private readonly TimeProvider clock = timeProvider ?? TimeProvider.System;
@@ -56,20 +57,17 @@ public sealed class AiConfigurationService(ISettingsStore settings, ISecretStore
         finally { operation.Release(); }
     }
 
-    public Task TestConnectionAsync(CancellationToken token) => RunRequestAsync<object?>(async (model, key, request) =>
-    {
-        await probe.SendAsync(model, key, request);
-        return null;
-    }, token);
+    public Task<AiUsage?> TestConnectionAsync(CancellationToken token) => RunRequestAsync<AiUsage?>((model, key, request) => probe.SendAsync(model, key, request), token);
 
     public async Task<T> RunRequestAsync<T>(Func<string, string, CancellationToken, Task<T>> send, CancellationToken token)
     {
         if (!await operation.WaitAsync(0, token)) throw new AiException(AiFailure.Busy);
         using var timer = new CancellationTokenSource(TimeSpan.FromSeconds(60), clock);
-        using var request = CancellationTokenSource.CreateLinkedTokenSource(token, timer.Token);
+        using var request = CancellationTokenSource.CreateLinkedTokenSource(token, timer.Token, authorizationCancellation?.Invoke() ?? CancellationToken.None);
         try
         {
             using var diskLock = AcquireDiskLock();
+            if (allowPaidRequests is not null && !await allowPaidRequests(request.Token)) throw new AiException(AiFailure.PlanSafetyUnverified);
             var value = await settings.ReadSettingsAsync(request.Token);
             AiSettingsRules.Validate(value);
             if (!value.AiEnabled) throw new AiException(AiFailure.Disabled);

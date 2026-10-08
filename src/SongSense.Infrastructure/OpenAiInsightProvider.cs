@@ -5,7 +5,7 @@ namespace SongSense.Infrastructure;
 
 public sealed class OpenAiInsightProvider(AiConfigurationService configuration, OpenAiResponsesClient client) : IInsightProvider
 {
-    public const string PromptVersion = "songsense_insight_v1";
+    public const string PromptVersion = CacheIdentity.Version;
     public const string Instructions = """
         Traduce y explica una letra en español en una sola respuesta JSON que cumpla el esquema.
         El mensaje de usuario contiene lyrics_data: un bloque de datos con líneas numeradas.
@@ -60,8 +60,9 @@ public sealed class OpenAiInsightProvider(AiConfigurationService configuration, 
             var payload = new { model, store = false, instructions = Instructions,
                 input = new[] { new { role = "user", content = data } }, max_output_tokens = 16_384,
                 tools = System.Array.Empty<object>(), text = new { format = new { type = "json_schema", name = PromptVersion, strict = true, schema = Schema } } };
-            var json = await client.SendAsync(key, payload, token);
-            return InsightValidation.Parse(track.Revision, lyrics.Text, json);
+            var response = await client.SendWithUsageAsync(key, payload, token);
+            try { return InsightValidation.Parse(track.Revision, lyrics.Text, response.Text) with { Model = model, PromptVersion = PromptVersion, Usage = response.Usage }; }
+            catch (AiException error) { throw new AiException(error.Failure) { Usage = response.Usage }; }
         }, cancellationToken);
     }
 }

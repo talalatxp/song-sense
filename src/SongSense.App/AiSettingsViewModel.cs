@@ -41,8 +41,9 @@ public sealed class AiSettingsViewModel(AiConfigurationService service, Cancella
     public Task TestAsync() => RunAsync(async token =>
     {
         message = "Probando conexión: solicitud de pago en curso…"; Notify();
-        await service.TestConnectionAsync(token);
-        message = "Conexión válida: respuesta estructurada comprobada. La solicitud cuenta para el límite diario.";
+        var usage = await service.TestConnectionAsync(token);
+        message = "Conexión válida: respuesta estructurada comprobada. La solicitud cuenta para el límite diario. " +
+            (usage?.Describe() ?? "Consumo no comunicado por OpenAI; no equivale a 0 tokens.");
     });
     public void Cancel() => request?.Cancel();
 
@@ -67,7 +68,7 @@ public sealed class AiSettingsViewModel(AiConfigurationService service, Cancella
     {
         try { await action(current.Token); }
         catch (OperationCanceledException) { message = "Operación cancelada. Los intentos reservados no se devuelven al contador."; }
-        catch (AiException error) { message = Describe(error.Failure); }
+        catch (AiException error) { message = Describe(error.Failure) + (error.Usage is { } usage ? " " + usage.Describe() : ""); }
         catch (Exception) { message = Describe(AiFailure.LocalStorage); }
         finally
         {
@@ -89,6 +90,8 @@ public sealed class AiSettingsViewModel(AiConfigurationService service, Cancella
     public static string Describe(AiFailure failure) => failure switch
     {
         AiFailure.Disabled => "La IA está desactivada. Lee el aviso, actívala y guarda antes de probar.",
+        AiFailure.PlanSafetyUnverified => "Consulta bloqueada: no se puede verificar que solo se use el plan incluido. No se utilizará una API key automáticamente. El modo de pago debe elegirse explícitamente en Cuenta y consumo.",
+        AiFailure.SessionExpired => "La sesión de ChatGPT caducó o fue revocada. Sus tokens ya no se utilizan; vuelve a conectar la cuenta.",
         AiFailure.MissingKey => "Falta una clave. Introdúcela en el campo enmascarado y guarda.",
         AiFailure.InvalidSettings => "Revisa los ajustes: modelo explícito sin espacios (máximo 120 caracteres; no pegues la clave aquí), clave de hasta 512 caracteres sin espacios, límite entero de 1 a 100 y aviso aceptado antes de activar IA. No se recortan valores.",
         AiFailure.DailyLimit => "Límite diario alcanzado. Espera al día siguiente o aumenta explícitamente el límite y guarda.",

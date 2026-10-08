@@ -21,12 +21,12 @@ public sealed class StorageTests : IDisposable
         using var connection = OpenDatabase();
         using var command = connection.CreateCommand();
         command.CommandText = "PRAGMA user_version;";
-        Assert.Equal(1L, command.ExecuteScalar());
+        Assert.Equal(3L, command.ExecuteScalar());
         command.CommandText = "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name;";
         using var reader = command.ExecuteReader();
         var tables = new List<string>();
         while (reader.Read()) tables.Add(reader.GetString(0));
-        Assert.Equal(new[] { "app_settings", "daily_request_counts" }, tables);
+        Assert.Equal(new[] { "app_settings", "daily_request_counts", "insight_cache", "song_cache", "song_insights" }, tables);
     }
 
     [Fact]

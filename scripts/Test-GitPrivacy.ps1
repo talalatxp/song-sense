@@ -10,11 +10,14 @@ $secretPatterns = @{
  'GitHub credential' = '(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,})'
  'Slack credential' = 'xox[baprs]-[A-Za-z0-9-]{20,}'
  'Private key' = '-----BEGIN (?:RSA |EC |OPENSSH |DSA |ENCRYPTED )?PRIVATE KEY-----'
- 'Literal secret' = '(?i)(?:api[_-]?key|client[_-]?secret|password|access[_-]?token)\s*[:=]\s*["''][A-Za-z0-9/+_=.-]{20,}["'']'
+ 'JWT credential' = '(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}'
+ 'OAuth callback credential' = '(?i)(?:[?&](?:code|id_token_hint|access_token|refresh_token)=)[A-Za-z0-9_%.-]{20,}'
+ 'Literal secret' = '(?i)(?:api[_-]?key|client[_-]?secret|password|access[_-]?token|refresh[_-]?token|id[_-]?token)\s*[:=]\s*["''][A-Za-z0-9/+_=.-]{20,}["'']'
 }
 function Test-PrivatePath([string]$name) {
+ if ($name -match '(?i)(^|/)(?:auth|oauth[^/]*|token[^/]*)\.json$') { return $true }
  if ($name -match '(^|/)(?:\.env(?:\..*)?|credentials[^/]*|secrets[^/]*|appsettings\.Local\.json)$' -and $name -notmatch '(^|/)\.env\.example$') { return $true }
- return $name -match '(?i)\.(?:db|db-shm|db-wal|dpapi(?:\.[^/]*\.tmp)?|key|pem|pfx|p12|dmp|log|lnk)$' -or $name -match '(^|/)(?:bin|obj|artifacts|work|TestResults)/'
+ return $name -match '(?i)\.(?:db|db-shm|db-wal|dpapi(?:\.lock|\.[^/]*\.tmp)?|key|pem|pfx|p12|dmp|log|lnk)$' -or $name -match '(^|/)(?:bin|obj|artifacts|work|TestResults)/'
 }
 function Test-Content([byte[]]$bytes, [string]$label) {
  # Inspect UTF-8/ASCII and UTF-16; binary assets can otherwise hide ASCII strings.
@@ -74,7 +77,7 @@ try {
   if (Test-PrivatePath $name) { $findings.Add("history: $name [private path]") }
   Test-Content (Get-BlobBytes $objectId) "history: $name ($($objectId.Substring(0,8)))"
  }
- $expectedIgnored = @('.env', 'credentials.dpapi', 'credentials.dpapi.test.tmp', 'songsense.db', 'secrets.json', 'sample.pem', 'crash.dmp', 'artifacts/probe.txt', 'work/private.txt')
+ $expectedIgnored = @('.env', 'credentials.dpapi', 'credentials.dpapi.test.tmp', 'session.dpapi.lock', 'auth.json', 'oauth-export.json', 'tokens.json', 'songsense.db', 'secrets.json', 'sample.pem', 'crash.dmp', 'artifacts/probe.txt', 'work/private.txt')
  $ignored = @(& $gitExecutable check-ignore --no-index -- $expectedIgnored)
  foreach ($name in $expectedIgnored) { if ($name -notin $ignored) { $findings.Add("ignore missing: $name") } }
  if ($findings.Count -gt 0) {

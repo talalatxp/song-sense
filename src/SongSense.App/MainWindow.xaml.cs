@@ -5,6 +5,18 @@ namespace SongSense.App;
 public partial class MainWindow : Window
 {
     public Func<AiSettingsWindow>? CreateSettingsWindow { get; init; }
+    public Func<ConnectionWindow>? CreateConnectionWindow { get; init; }
+    private ConnectionWindow? connectionWindow;
+    private void OpenConnection(object sender, RoutedEventArgs args)
+    {
+        if (connectionWindow is not null) { connectionWindow.Activate(); return; }
+        connectionWindow = CreateConnectionWindow?.Invoke();
+        if (connectionWindow is null) return;
+        connectionWindow.Owner = this;
+        connectionWindow.Closed += (_, _) => connectionWindow = null;
+        connectionWindow.Show();
+    }
+    public void ShowApiSettings() => OpenAiSettings(this, new RoutedEventArgs());
     private AiSettingsWindow? settingsWindow;
     private void OpenAiSettings(object sender, RoutedEventArgs args)
     {
@@ -46,5 +58,11 @@ public partial class MainWindow : Window
     {
         if (DataContext is MainViewModel vm && vm.BeginLyricsEdit() is { } context)
             new LyricsEditorWindow(new LyricsEditorViewModel(vm, context)) { Owner = this }.Show();
+    }
+    private async void RecoverStorage(object sender, RoutedEventArgs args)
+    {
+        if (DataContext is not MainViewModel vm || !vm.CanRecoverStorage) return;
+        if (MessageBox.Show(this, "Cierra otras instancias de Song Sense. Se conservará una copia local del original y se creará una base nueva. La IA quedará desactivada; si los contadores no se pueden leer, no habrá solicitudes disponibles hoy. La caché dañada se conservará en la copia. ¿Recuperar?", "Recuperar base local", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
+            await vm.RecoverStorageAsync();
     }
 }

@@ -17,6 +17,11 @@ work/
 # Local credentials, exports and diagnostic artifacts must never enter Git.
 *.dpapi
 *.dpapi.*.tmp
+*.dpapi.lock
+# OAuth exports are never source files.
+auth.json
+oauth*.json
+token*.json
 *.key
 *.pem
 *.pfx

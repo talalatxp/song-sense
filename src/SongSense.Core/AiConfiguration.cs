@@ -16,12 +16,18 @@ public interface IRequestBudget
     Task<bool> TryReserveRequestAsync(DateOnly localDate, CancellationToken cancellationToken = default);
 }
 
-public enum AiFailure { Disabled, MissingKey, InvalidSettings, DailyLimit, Busy, Authentication, IncompatibleModel, RateLimited, Timeout, Offline, InvalidResponse, HttpError, LocalStorage, Refused, Incomplete, UnknownLanguage, InvalidLyrics }
+public enum AiFailure { Disabled, MissingKey, InvalidSettings, DailyLimit, Busy, Authentication, IncompatibleModel, RateLimited, Timeout, Offline, InvalidResponse, HttpError, LocalStorage, Refused, Incomplete, UnknownLanguage, InvalidLyrics, PlanSafetyUnverified, SessionExpired }
 
 // Never attach response bodies, API keys, HTTP headers or original exceptions.
+public enum AuthenticationStep { None, Consent, Callback, TokenExchange, TokenShape, IdentitySignature, IdentityClaims, IdentityMetadata, SelectedAccount }
+public enum OAuthFailureCode { None, InvalidGrant, InvalidClient, InvalidRequest, InvalidScope, AccessDenied, UnsupportedGrantType, Other }
 public sealed class AiException(AiFailure failure) : Exception("No se pudo completar la operación de IA.")
 {
     public AiFailure Failure { get; } = failure;
+    public AiUsage? Usage { get; init; }
+    public AuthenticationStep AuthenticationStep { get; init; }
+    public OAuthFailureCode OAuthCode { get; init; }
+    public int? HttpStatus { get; init; }
 }
 
 public static partial class AiSettingsRules

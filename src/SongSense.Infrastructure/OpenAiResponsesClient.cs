@@ -9,7 +9,22 @@ namespace SongSense.Infrastructure;
 public sealed class OpenAiResponsesClient(HttpClient http)
 {
     public async Task<string> SendAsync(string key, object payload, CancellationToken token, int maximumBytes = 1_048_576)
+        => (await SendWithUsageAsync(key, payload, token, maximumBytes)).Text;
+
+    public sealed record Result(string Text, AiUsage? Usage);
+    public static AiUsage? ReadUsage(JsonElement root)
     {
+        if (!root.TryGetProperty("usage", out var usage) || usage.ValueKind != JsonValueKind.Object ||
+            !usage.TryGetProperty("input_tokens", out var input) || input.ValueKind != JsonValueKind.Number || !input.TryGetInt64(out long i) ||
+            !usage.TryGetProperty("output_tokens", out var output) || output.ValueKind != JsonValueKind.Number || !output.TryGetInt64(out long o) ||
+            !usage.TryGetProperty("total_tokens", out var total) || total.ValueKind != JsonValueKind.Number || !total.TryGetInt64(out long t) ||
+            i < 0 || o < 0 || t < 0 || i > long.MaxValue - o || i + o != t) return null;
+        return new AiUsage(i, o, t);
+    }
+
+    public async Task<Result> SendWithUsageAsync(string key, object payload, CancellationToken token, int maximumBytes = 1_048_576)
+    {
+        AiUsage? usage = null;
         using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/responses");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
         request.Content = JsonContent.Create(payload);
@@ -36,6 +51,7 @@ public sealed class OpenAiResponsesClient(HttpClient http)
             }
             using var document = JsonDocument.Parse(buffer.ToArray());
             var root = document.RootElement;
+            usage = ReadUsage(root);
             var status = root.GetProperty("status").GetString();
             if (status == "incomplete") throw new AiException(AiFailure.Incomplete);
             if (status != "completed") throw new AiException(AiFailure.InvalidResponse);
@@ -55,13 +71,14 @@ public sealed class OpenAiResponsesClient(HttpClient http)
                 }
             }
             if (texts.Count != 1) throw new AiException(AiFailure.InvalidResponse);
-            return texts[0];
+            return new Result(texts[0], usage);
         }
+        catch (AiException error) { throw new AiException(error.Failure) { Usage = usage }; }
         catch (HttpRequestException) { throw new AiException(AiFailure.Offline); }
         catch (IOException) { throw new AiException(AiFailure.Offline); }
-        catch (JsonException) { throw new AiException(AiFailure.InvalidResponse); }
-        catch (InvalidOperationException) { throw new AiException(AiFailure.InvalidResponse); }
-        catch (KeyNotFoundException) { throw new AiException(AiFailure.InvalidResponse); }
+        catch (JsonException) { throw new AiException(AiFailure.InvalidResponse) { Usage = usage }; }
+        catch (InvalidOperationException) { throw new AiException(AiFailure.InvalidResponse) { Usage = usage }; }
+        catch (KeyNotFoundException) { throw new AiException(AiFailure.InvalidResponse) { Usage = usage }; }
         finally { request.Headers.Authorization = null; }
     }
 }

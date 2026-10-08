@@ -1,6 +1,6 @@
 # Ruta de desarrollo — Letras en español para Spotify en Windows
 
-Fecha: 6 de octubre de 2026. Estado: F01–F04 cerradas; F05 y F06 implementadas, pendientes de validación real de OpenAI; F07–F10 pendientes. Evidencia en [ESTADO_FEATURES.md](ESTADO_FEATURES.md).
+Fecha: 7 de octubre de 2026. Estado: F01–F04 y F07 cerradas; F05 y F06 implementadas, pendientes de validación real de OpenAI; F08–F11 pendientes. F08 incorpora la conexión con ChatGPT Plus solicitada el 7 de octubre. Evidencia en [ESTADO_FEATURES.md](ESTADO_FEATURES.md).
 Nombre del proyecto: **SongSense**. Repositorio: `song-sense`.
 
 ## Objetivo y alcance de la primera versión
@@ -20,6 +20,7 @@ La ruta se ejecuta en orden, una feature por petición. Solicitar una feature au
 | Detección | Sesiones multimedia de Windows, mediante `Windows.Media.Control`. |
 | Letras | API pública de LRCLIB; sin scraping ni endpoints privados de Spotify. |
 | IA inicial | OpenAI Responses API mediante HTTPS y salida JSON estructurada. |
+| IA con suscripción, F08 | Iniciar sesión con ChatGPT y autorizar el uso incluido de Plus; sin cargos adicionales ni paso automático a API key. |
 | Modelo | Identificador configurable obligatorio; sin valor predeterminado ni sustitución silenciosa. F05 valida el modelo configurado. |
 | Datos | SQLite en `%LOCALAPPDATA%\SongSense`; migraciones desde F01. |
 | Secretos | Clave API cifrada con DPAPI para el usuario actual; nunca en SQLite, repositorio ni logs. |
@@ -29,7 +30,7 @@ La ruta se ejecuta en orden, una feature por petición. Solicitar una feature au
 
 La elección de LRCLIB no acredita derechos adicionales sobre las letras: la documentación consultada confirma acceso técnico gratuito, pero no establece expresamente permiso para traducción o procesamiento con IA. Esa incertidumbre sigue abierta y no se describirá el producto como una integración con licencias verificadas. El alcance es un prototipo personal, sin distribución pública del catálogo. No se añadirá una pantalla que afirme que aceptar un aviso resuelve los derechos.
 
-La IA requiere una clave con acceso y facturación para la API. La aplicación informa antes de activarla de que enviará la letra confirmada al proveedor y de que las solicitudes pueden tener coste. La implementación de F06 evita enviar título, artista y álbum. Crear esta ruta no realiza llamadas de pago.
+La ruta inicial F05/F06 usa una clave con acceso y facturación para la API, cobrada aparte de ChatGPT Plus. F08 añade una alternativa mediante la cuenta ChatGPT que se usa en Codex, con uso incluido compartido y bloqueo al agotarse, bajo las condiciones de su contrato. No es una nueva suscripción «Codex Plus». La aplicación informa antes de activarla de que enviará la letra confirmada al proveedor; F06 evita enviar título, artista y álbum. Cambiar este plan no conecta cuentas ni realiza llamadas de IA.
 
 ## Contrato transversal
 
@@ -55,11 +56,12 @@ La IA requiere una clave con acceso y facturación para la API. La aplicación i
 | F05 | Configuración segura de IA | Clave, modelo, activación y control de solicitudes funcionan. |
 | F06 | Traducción y significado | Produce y muestra resultados completos y validados. |
 | F07 | Caché local | Reutiliza resultados y permite borrarlos o regenerarlos. |
-| F08 | Flujo automático | Cambiar canción dispara el flujo completo sin resultados obsoletos. |
-| F09 | Ventana de uso diario | Ventana flotante, bandeja y preferencias persistentes. |
-| F10 | Validación y entrega | ZIP portable probado con Spotify real y guía de uso. |
+| F08 | ChatGPT Plus sin cargos extra | Inicio de sesión desde la app y generación con uso incluido; bloqueo al agotarse y ninguna vía de cobro alternativa. |
+| F09 | Flujo automático | Cambiar canción dispara el flujo completo sin resultados obsoletos. |
+| F10 | Ventana de uso diario | Ventana flotante, bandeja y preferencias persistentes. |
+| F11 | Validación y entrega | ZIP portable probado con Spotify real y guía de uso. |
 
-Todas las features dependen del cierre de la inmediatamente anterior. Hasta F08, las consultas y generaciones se disparan mediante botones; F08 incorpora la automatización. Esto permite verificar cada integración por separado.
+Todas las features dependen del cierre de la inmediatamente anterior. Hasta F09, las consultas y generaciones se disparan mediante botones; F09 incorpora la automatización. Esto permite verificar cada integración por separado.
 
 ## F01 — Base ejecutable
 
@@ -181,7 +183,31 @@ Todas las features dependen del cierre de la inmediatamente anterior. Hasta F08,
 
 **Aceptación:** tras reiniciar, una canción guardada muestra su resultado sin llamada IA; cambiar una línea, modelo o versión del prompt obliga a regenerar; respetar TTL; borrar caché conserva contador; edición manual persiste; pruebas de escritura interrumpida, expulsión y asociación ambigua.
 
-## F08 — Flujo automático
+## F08 — Cuenta ChatGPT Plus y uso incluido sin cargos extra
+
+**Objetivo:** ofrecer desde Song Sense «Continuar con ChatGPT» para usar la cuenta Plus conectada a Codex, sin clave API ni cargos adicionales, y detener nuevas generaciones cuando el proveedor rechace el uso incluido disponible.
+
+**Dependencias:** caché F07 cerrada; generación y validación de F06; flujo oficial habilitado para la cuenta y el cliente local. Implementación parcial el 7 de octubre: OAuth y consumo; no acredita conexión real ni habilita generaciones con el plan mientras la política de créditos no sea verificable. Evidencia en [ESTADO_FEATURES.md](ESTADO_FEATURES.md#f08--implementación-parcial-segura--7-de-octubre-de-2026).
+
+**Incluye:**
+
+- Ajustes con modos separados «ChatGPT · solo uso incluido» y «API key · de pago». Conectar, ver la cuenta seleccionada y desconectar desde la app; login oficial en navegador con OAuth, PKCE y verificación de `state` y permisos. No copiar ni reutilizar credenciales internas de Codex, ni pedir contraseña en Song Sense.
+- Autorizar expresamente el uso del plan, además del inicio de sesión. Tokens de acceso/renovación protegidos con DPAPI fuera del repositorio y SQLite; renovación segura y limpieza al desconectar. Sin tokens ni letras en logs, diagnóstico, URLs ajenas al flujo oficial, ZIP o Git.
+- Consultar modelos autorizados para esa cuenta y exigir selección. El ID API configurado en F05 no se da por válido en este modo. Requests adaptadas a la ruta oficial de Responses, con streaming y `store: false`; omitir parámetros incompatibles de la ruta API key, incluido `max_output_tokens` según las restricciones actuales. Mantener límites locales de entrada, tamaño y tiempo sin afirmar un presupuesto de tokens que el proveedor no permite fijar.
+- Conservar el contrato de idioma, traducción y significado de F06: solo aceptar JSON completo validado tras finalización confirmada del stream. Nada parcial ante corte, rechazo o error. Comprobar con la integración real el soporte del esquema; una incompatibilidad bloquea el modo, sin cambiar silenciosamente de modelo o perder validaciones.
+- Mostrar «Usando tu plan ChatGPT» y acceso a «Gestionar uso». Explicar que consume la cuota compartida con ChatGPT/Codex y límites de la app; no mostrar un contador ficticio de tokens restantes. El límite local de solicitudes sigue siendo una protección adicional, independiente del límite del plan.
+- Mostrar, en cada análisis y prueba, tokens de entrada, salida y total comunicados por el proveedor. Si el consumo falta o la consulta se cancela antes de conocerlo, indicarlo como desconocido; no estimar porcentaje del plan a partir de tokens. Una recuperación local muestra 0 tokens nuevos y no reproduce un consumo histórico como si fuera una nueva consulta.
+- **Política obligatoria de cero cargos adicionales:** prohibir fallback automático a API key, compra/recarga de créditos o uso de saldo adicional. Guiar al usuario para desactivar «Permitir que otras apps usen créditos al alcanzar el límite» en ChatGPT. Habilitar «solo uso incluido» únicamente cuando se haya verificado que el proveedor permite cumplir esa restricción. Si no puede verificarse o deja de cumplirse, bloquear generación y explicar el motivo; una casilla local no demuestra el estado del servidor.
+- Al recibir el error oficial de cuota agotada, bloquear Traducir, Regenerar y cualquier prueba de IA en este modo. Sin reintentos automáticos, cola ni solicitudes para sondear continuamente la cuota. Lectura de caché, letras y borrado local siguen disponibles. No inferir que se agotó todo Plus ni inventar fecha de reinicio: puede ser un límite específico de Song Sense. Ofrecer Gestionar uso y comprobación manual de disponibilidad; desbloquear solo con evidencia del proveedor o un restablecimiento comunicado por él.
+- Permiso denegado, cuenta no elegible, sesión revocada/caducada o disponibilidad de cuota desconocida: detener nuevas generaciones con una acción concreta, sin sustituir el mecanismo de facturación. Cambiar cuenta o modo cancela solicitudes, invalida contexto y separa las claves de caché por ruta de autenticación, modelo y versión del prompt, sin introducir secretos en esas claves.
+
+**No incluye:** automatización de canciones (F09), cuotas independientes de Plus, promesa de uso ilimitado, scraping de ChatGPT, endpoints privados, extracción de tokens de Codex ni cargos de API autorizados implícitamente por conectar Plus.
+
+**Aceptación:** login/logout real con la cuenta Plus, permisos revisados y una traducción de texto propio completa sin API key; evidencia de consumo incluido y de créditos extra desactivados. Pruebas controladas de denegación, renovación/revocación, stream incompleto, cambio de cuenta/modelo, cuota agotada y cuota no comprobable. En todos los bloqueos: cero nuevas llamadas de generación, cero fallback de pago y caché accesible; reabrir conserva el bloqueo hasta comprobar disponibilidad. Auditoría de secretos en disco, Git y entrega. Si elegibilidad, formato o política de cero cargos no se pueden demostrar, F08 permanece pendiente de validación y el modo queda deshabilitado.
+
+**Fuentes oficiales verificadas el 7 de octubre de 2026:** [flujo para aplicaciones locales](https://developers.openai.com/siwc/token-sharing-open-source), [modelos e inferencia](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference), [restricciones de la integración](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations), [errores y cuota agotada](https://developers.openai.com/siwc/token-sharing-open-source/errors-and-recovery), [uso compartido y permiso de créditos extra](https://learn.chatgpt.com/docs/sign-in-with-chatgpt). Revisar cambios de estas condiciones al implementar.
+
+## F09 — Flujo automático
 
 **Objetivo:** completar el caso de uso original al reproducir o cambiar una canción.
 
@@ -190,6 +216,7 @@ Todas las features dependen del cierre de la inmediatamente anterior. Hasta F08,
 - Interruptor «Actualizar automáticamente», inicialmente activado; IA mantiene su activación independiente de F05.
 - Al detectar metadatos nuevos, esperar 1,5 segundos de estabilidad y ejecutar: buscar caché → resolver letra → consultar caché de análisis → generar cuando esté permitido → mostrar.
 - Si falta selección, configuración, conexión o cuota, detenerse en el estado correspondiente; no generar a ciegas.
+- En modo ChatGPT de F08, aplicar el bloqueo por cuota o uso incluido no verificable antes de cualquier generación; sin fallback a API key o créditos extra. Recuperar caché no consume el plan.
 - Cambiar de canción cancela operaciones anteriores. Una llamada de pago ya enviada puede seguir contando; cancelar no garantiza evitar el cargo.
 - Si una llamada IA anterior sigue en curso, conservar únicamente la última canción pendiente; no acumular cola de canciones saltadas.
 - Debounce y deduplicación: eventos repetidos no duplican solicitudes. Pausa/reanudación no vuelve a procesar. Una llamada fallida no se repite hasta «Reintentar» o abandonar esa canción y volver a ella.
@@ -197,7 +224,7 @@ Todas las features dependen del cierre de la inmediatamente anterior. Hasta F08,
 
 **Aceptación:** prueba real de cinco cambios rápidos, pausa, reanudación, vuelta a canción guardada y activación/desactivación. Solo la canción vigente actualiza la pantalla; no hay llamadas duplicadas; instrumental, ambigüedad y límite diario detienen el flujo correctamente. Secuencia completa documentada con Spotify y proveedor real.
 
-## F09 — Ventana de uso diario
+## F10 — Ventana de uso diario
 
 **Objetivo:** hacer cómoda la aplicación mientras se escucha música o se trabaja.
 
@@ -213,7 +240,7 @@ Todas las features dependen del cierre de la inmediatamente anterior. Hasta F08,
 
 **Aceptación:** inspección real a 100 % y 150 % de escala, textos largos, ventana mínima, teclado, dos monitores cuando estén disponibles, minimizar/abrir/salir y segunda instancia. Si una configuración no puede probarse se registra expresamente; no se declara validada.
 
-## F10 — Validación y entrega portable
+## F11 — Validación y entrega portable
 
 **Objetivo:** entregar una versión personal ejecutable y documentada.
 
@@ -221,10 +248,10 @@ Todas las features dependen del cierre de la inmediatamente anterior. Hasta F08,
 
 - Compilación Release, pruebas de lógica e integraciones con respuestas controladas, y cierre de defectos de las features anteriores.
 - Publicación autocontenida `win-x64` en carpeta y ZIP; sin trimming de WPF ni instalador. Mantener una carpeta completa; no prometer un único EXE.
-- Guía de primera ejecución, configuración de API/modelo, coste, almacenamiento, borrado y solución de errores.
+- Guía de primera ejecución, conexión de ChatGPT Plus o configuración explícita de API de pago, modelo, uso compartido y bloqueo sin cargos extra de F08, almacenamiento, borrado y solución de errores.
 - Evidencia separada de pruebas automáticas, ejecución visual en Windows y consultas reales. No equiparar compilación con validación de uso.
 - Matriz real: inglés, español, letra mixta, instrumental, canción sin letra, versión ambigua y cambio rápido. Casos no disponibles realmente se prueban de forma controlada y se etiquetan así.
-- Red desconectada con resultado ya guardado y con canción nueva; cuota agotada; clave inválida; reinicio y recuperación de Spotify.
+- Red desconectada con resultado ya guardado y con canción nueva; cuota local y del plan agotadas; créditos extra desactivados y sin fallback de pago; sesión ChatGPT revocada; clave API inválida; reinicio y recuperación de Spotify.
 - Auditoría del ZIP para asegurar que no contiene claves, base personal, letras de prueba, logs sensibles ni credenciales.
 
 **Aceptación:** ZIP abre fuera de la carpeta de desarrollo en Windows x64; Spotify real se detecta; una canción de otro idioma muestra traducción y explicación; repetirla no consume una llamada; español no se traduce; todas las limitaciones y pruebas pendientes se documentan. Ninguna feature pendiente se oculta bajo una entrega «terminada».
