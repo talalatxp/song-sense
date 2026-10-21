@@ -16,10 +16,15 @@ public partial class App : Application
     private LrclibLyricsProvider? lyricsProvider;
     private HttpClient? aiHttp;
     private ChatGptConnection? connection;
+    private SingleInstance? instance;
+    private DesktopTray? tray;
+    private bool exitRequested;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        instance = new SingleInstance();
+        if (!instance.IsFirst) { _ = ActivateExistingAsync(); return; }
         lyricsHttp = new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false }) { Timeout = Timeout.InfiniteTimeSpan };
         lyricsProvider = new LrclibLyricsProvider(lyricsHttp);
         var settingsStore = new SqliteSettingsStore(SqliteSettingsStore.DefaultDatabasePath);
@@ -31,7 +36,7 @@ public partial class App : Application
             allowPaidRequests: async token => connection.Mode == AiConnectionMode.ApiKey && connection.CanGenerate && (await chatGptStore.ReadAsync(token)).Mode == AiConnectionMode.ApiKey,
             authorizationCancellation: () => connection.AuthorizationCancellation);
         viewModel = new MainViewModel(settingsStore, lyricsProvider, lifetime.Token,
-            new ConnectionInsightProvider(connection, new OpenAiInsightProvider(aiConfiguration, new OpenAiResponsesClient(aiHttp))),
+            new ConnectionInsightProvider(connection, new OpenAiInsightProvider(aiConfiguration, new OpenAiResponsesClient(aiHttp)), new ChatGptInsightProvider(connection, aiHttp, settingsStore, new ChatGptRequestBudget(settingsStore))),
             cache: new SqliteCacheStore(SqliteSettingsStore.DefaultDatabasePath), connection: connection);
         connection.Changed += (_, _) =>
         {
@@ -51,10 +56,16 @@ public partial class App : Application
                 return new AiSettingsWindow(settingsVm);
             } };
         MainWindow = mainWindow;
+        mainWindow.InitializePreferences(new WindowPreferenceStore(WindowPreferenceStore.DefaultPath));
+        mainWindow.ExitRequested += (_, _) => { exitRequested = true; mainWindow.Close(); };
+        tray = new DesktopTray(viewModel, mainWindow.OpenFromTray, () => { exitRequested = true; mainWindow.Close(); });
+        instance.Listen(() => Dispatcher.BeginInvoke(() => { if (!closing) mainWindow.OpenFromTray(); }));
         MainWindow.Closing += async (_, args) =>
         {
             if (canClose) return;
             args.Cancel = true;
+            mainWindow.SavePreferences();
+            if (!exitRequested) { mainWindow.Hide(); return; }
             if (closing) return;
             closing = true;
             detector.TrackChanged -= TrackChanged;
@@ -70,12 +81,19 @@ public partial class App : Application
             aiHttp.Dispose();
             canClose = true;
             await Dispatcher.InvokeAsync(MainWindow.Close);
+            Shutdown();
         };
         MainWindow.Show();
         viewModel.StartAutomaticUpdates();
         _ = viewModel.InitializeAsync();
         _ = InitializeConnectionAsync();
         _ = detector.StartAsync(lifetime.Token);
+    }
+    private async Task ActivateExistingAsync()
+    {
+        if (!await instance!.ActivateFirstAsync())
+            MessageBox.Show("Song Sense ya está abierto. Puedes abrirlo desde su icono de la bandeja.", "Song Sense", MessageBoxButton.OK, MessageBoxImage.Information);
+        Shutdown();
     }
     private async Task InitializeConnectionAsync()
     {
@@ -92,6 +110,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         lifetime.Cancel();
+        tray?.Dispose(); instance?.Dispose();
         lifetime.Dispose();
         base.OnExit(e);
     }

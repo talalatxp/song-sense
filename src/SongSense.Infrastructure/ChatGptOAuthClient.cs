@@ -220,7 +220,8 @@ public sealed class ChatGptOAuthClient(HttpClient http)
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", registration.AccessToken);
         try
         {
-            using var document = await SendJsonAsync(request, token, true);
+            // Catalogs include capabilities and can exceed the credential-response limit.
+            using var document = await SendJsonAsync(request, token, true, maxResponseBytes: 4 * 1024 * 1024);
             var models = document.RootElement.GetProperty("models");
             if (models.ValueKind != JsonValueKind.Array || models.GetArrayLength() > 300) throw new AiException(AiFailure.InvalidResponse);
             return models.EnumerateArray().Where(x => x.GetProperty("visibility").GetString() == "list")
@@ -237,17 +238,17 @@ public sealed class ChatGptOAuthClient(HttpClient http)
         return value;
     }
 
-    private async Task<JsonDocument> SendJsonAsync(HttpRequestMessage request, CancellationToken token, bool authentication, bool renewal = false)
+    private async Task<JsonDocument> SendJsonAsync(HttpRequestMessage request, CancellationToken token, bool authentication, bool renewal = false, int maxResponseBytes = 524_288)
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token); deadline.CancelAfter(TimeSpan.FromSeconds(30));
         try
         {
             using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
-            if (response.Content.Headers.ContentLength > 524_288) throw new AiException(AiFailure.InvalidResponse);
+            if (response.Content.Headers.ContentLength > maxResponseBytes) throw new AiException(AiFailure.InvalidResponse);
             await using var stream = await response.Content.ReadAsStreamAsync(deadline.Token);
             using var memory = new MemoryStream(); byte[] chunk = new byte[4096]; int count;
             while ((count = await stream.ReadAsync(chunk, deadline.Token)) != 0)
-            { if (memory.Length + count > 524_288) throw new AiException(AiFailure.InvalidResponse); memory.Write(chunk, 0, count); }
+            { if (memory.Length + count > maxResponseBytes) throw new AiException(AiFailure.InvalidResponse); memory.Write(chunk, 0, count); }
             byte[] bytes = memory.ToArray();
             try
             {

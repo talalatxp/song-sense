@@ -29,7 +29,8 @@ public sealed class AutomaticWorkflowTests
         Assert.Empty(provider.LyricsCalls);
         await vm.WaitForAutomaticAsync().WaitAsync(TimeSpan.FromSeconds(8));
         Assert.Equal(new long[] { 5 }, provider.LyricsCalls);
-        Assert.Equal(new long[] { 5 }, provider.InsightCalls);
+        Assert.Empty(provider.InsightCalls);
+        await vm.GenerateInsightAsync();
         Assert.Equal(5, vm.Insight!.TrackRevision);
         vm.ApplyDetection(new(ApplicationState.Paused, Track(5) with { Playback = PlaybackState.Paused }, "Spotify.exe"));
         Observe(vm, 5); await vm.WaitForAutomaticAsync();
@@ -42,12 +43,17 @@ public sealed class AutomaticWorkflowTests
         var pending = new TaskCompletionSource<SongInsight>(TaskCreationOptions.RunContinuationsAsynchronously);
         var provider = new Provider { Generate = (track, _) => track.Revision == 1 ? pending.Task : Task.FromResult(Result(track)) };
         var vm = await Start(provider); Observe(vm, 1);
+        await vm.WaitForAutomaticAsync();
+        var generation = vm.GenerateInsightAsync();
         await Until(() => provider.InsightCalls.Count == 1);
         for (var id = 2; id <= 5; id++) Observe(vm, id);
         await Task.Delay(1700);
         Assert.Single(provider.InsightCalls); Assert.Null(vm.Insight);
         pending.SetResult(Result(Track(1)));
+        await generation;
         await vm.WaitForAutomaticAsync().WaitAsync(TimeSpan.FromSeconds(8));
+        Assert.Single(provider.InsightCalls); Assert.Null(vm.Insight);
+        await vm.GenerateInsightAsync();
         Assert.Equal(new long[] { 1, 5 }, provider.InsightCalls);
         Assert.Equal(new long[] { 1, 5 }, provider.LyricsCalls);
         Assert.Equal(5, vm.Insight!.TrackRevision); await vm.StopAsync();
@@ -57,11 +63,13 @@ public sealed class AutomaticWorkflowTests
     public async Task PausingFreezesContentAndResumingUsesLatestObservation()
     {
         var provider = new Provider(); var store = new Store(); var vm = await Start(provider, store);
-        Observe(vm, 1); await vm.WaitForAutomaticAsync();
+        Observe(vm, 1); await vm.WaitForAutomaticAsync(); await vm.GenerateInsightAsync();
         vm.AutomaticUpdatesEnabled = false; Observe(vm, 2); Observe(vm, 3);
         Assert.Equal(1, vm.CurrentTrack!.Revision); Assert.Equal(1, vm.Insight!.TrackRevision);
         Assert.Contains("pausada", vm.AutomaticMessage); await vm.WaitForCacheAsync(); Assert.False(store.Automatic);
         vm.AutomaticUpdatesEnabled = true; await vm.WaitForAutomaticAsync();
+        Assert.Single(provider.InsightCalls); Assert.Null(vm.Insight);
+        await vm.GenerateInsightAsync();
         Assert.Equal(3, vm.Insight!.TrackRevision);
         Assert.Equal(new long[] { 1, 3 }, provider.InsightCalls); await vm.StopAsync();
     }
@@ -71,10 +79,13 @@ public sealed class AutomaticWorkflowTests
     {
         var provider = new Provider { Generate = (_, _) => Task.FromException<SongInsight>(new AiException(AiFailure.Timeout)) };
         var vm = await Start(provider); Observe(vm, 1); await vm.WaitForAutomaticAsync();
+        Assert.Empty(provider.InsightCalls); await vm.GenerateInsightAsync();
         Assert.Single(provider.InsightCalls); Assert.Null(vm.Insight);
         Observe(vm, 1); await vm.WaitForAutomaticAsync(); Assert.Single(provider.InsightCalls);
         provider.Generate = (track, _) => Task.FromResult(Result(track));
         vm.RetryAutomaticCommand.Execute(null); await vm.WaitForAutomaticAsync();
+        Assert.Single(provider.InsightCalls); Assert.Null(vm.Insight);
+        await vm.GenerateInsightAsync();
         Assert.Equal(2, provider.InsightCalls.Count); Assert.NotNull(vm.Insight); await vm.StopAsync();
     }
 
@@ -131,6 +142,7 @@ public sealed class AutomaticWorkflowTests
             await store.InitializeAsync(); await store.SaveSettingsAsync(new(true, "chosen-model"));
             var provider = new Provider(); var vm = new MainViewModel(store, provider, insightProvider: provider, cache: new SqliteCacheStore(path));
             vm.StartAutomaticUpdates(); await vm.InitializeAsync(); Observe(vm, 1); await vm.WaitForAutomaticAsync();
+            Assert.Empty(provider.InsightCalls); await vm.GenerateInsightAsync();
             Assert.NotNull(vm.Insight); await vm.WaitForCacheAsync();
             Observe(vm, 2); Observe(vm, 3);
             vm.ApplyDetection(new(ApplicationState.Playing, Track(1) with { Revision = 4 }, "Spotify.exe"));

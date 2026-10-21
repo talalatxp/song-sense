@@ -33,15 +33,17 @@
   <StackPanel Margin="24">
    <TextBlock Text="Cuenta y consumo" FontFamily="Georgia" FontSize="28" Foreground="{StaticResource Gold}"/>
    <TextBlock Text="{Binding Status}" Foreground="{StaticResource Gold}" Margin="0,12,0,16"/>
+   <TextBlock Text="{Binding Message}" Foreground="{StaticResource Gold}" Margin="0,0,0,8"/>
+   <Button Content="Cancelar operación" Click="CancelOperation" IsEnabled="{Binding CanCancel}" HorizontalAlignment="Left" Margin="0,0,0,12"/>
    <StackPanel IsEnabled="{Binding CanManage}">
     <TextBlock Text="Elige cómo usar IA" FontWeight="SemiBold"/>
     <WrapPanel Margin="0,8,0,16">
-     <Button Content="Usar ChatGPT · solo uso incluido" Click="UseChatGpt" Margin="0,0,8,8"/>
+     <Button Content="Usar mi plan de ChatGPT" Click="UseChatGpt" Margin="0,0,8,8"/>
      <Button Content="Elegir API key · de pago" Click="UseApiKey" Margin="0,0,0,8"/>
     </WrapPanel>
     <Border Background="{StaticResource Surface}" Padding="16" CornerRadius="8">
      <StackPanel>
-      <TextBlock Text="ChatGPT · solo uso incluido" Foreground="{StaticResource Gold}" FontSize="17"/>
+      <TextBlock Text="Mi plan de ChatGPT" Foreground="{StaticResource Gold}" FontSize="17"/>
       <TextBlock Text="{Binding Account}" Margin="0,10,0,10" AutomationProperties.Name="Cuenta ChatGPT seleccionada"/>
       <ComboBox ItemsSource="{Binding Accounts}" DisplayMemberPath="Label" SelectedValuePath="ClientId" SelectedValue="{Binding SelectedClientId}" AutomationProperties.Name="Cuentas ChatGPT" Margin="0,0,0,10"/>
       <WrapPanel>
@@ -49,28 +51,34 @@
        <Button Content="Continuar con ChatGPT" Click="Connect" Margin="0,0,8,8"/>
        <Button Content="Añadir otra cuenta" Click="AddAccount" IsEnabled="{Binding CanAddAccount}" Margin="0,0,0,8"/>
       </WrapPanel>
+      <TextBlock Text="{Binding PendingAccountMessage}" Foreground="{StaticResource Muted}" FontSize="13" Margin="0,8,0,8"/>
+      <Button Content="Conectar una cuenta distinta" Click="ChangePendingAccount" IsEnabled="{Binding CanChangePendingAccount}" HorizontalAlignment="Left" Margin="0,0,0,8"/>
       <TextBlock Text="Acceso oficial en tu navegador. Elige la cuenta que utilizas en Codex y comprueba aquí su correo. Song Sense no importa sesiones ni contraseñas de Codex. Los permisos no dan acceso a tus conversaciones de ChatGPT. Los tokens se cifran para tu usuario de Windows, fuera de Git y de SQLite." Foreground="{StaticResource Muted}" FontSize="13" Margin="0,8,0,16"/>
       <WrapPanel>
        <Button Content="Consultar modelos" Click="LoadModels" IsEnabled="{Binding CanLoadModels}" Margin="0,0,8,8"/>
        <Button Content="Desconectar cuenta" Click="Disconnect" IsEnabled="{Binding CanDisconnect}" Margin="0,0,0,8"/>
       </WrapPanel>
-      <ComboBox ItemsSource="{Binding Models}" DisplayMemberPath="DisplayName" SelectedValuePath="Slug" SelectedValue="{Binding SelectedModel}" AutomationProperties.Name="Modelo autorizado por ChatGPT" Margin="0,4,0,10"/>
-      <Button Content="Guardar modelo seleccionado" Click="SelectModel" HorizontalAlignment="Left"/>
+      <TextBlock Text="{Binding ModelMessage}" Foreground="{StaticResource Gold}" Margin="0,4,0,8" AutomationProperties.LiveSetting="Polite"/>
+      <ComboBox ItemsSource="{Binding Models}" DisplayMemberPath="DisplayName" SelectedValuePath="Slug" SelectedValue="{Binding SelectedModel}" IsEnabled="{Binding CanSelectModel}" AutomationProperties.Name="Modelo autorizado por ChatGPT" Margin="0,4,0,10"/>
+      <Button Content="Guardar modelo seleccionado" Click="SelectModel" IsEnabled="{Binding CanSaveModel}" HorizontalAlignment="Left"/>
      </StackPanel>
     </Border>
     <Border Background="{StaticResource Surface}" Padding="16" CornerRadius="8" Margin="0,16,0,16">
      <StackPanel>
-      <TextBlock Text="Consultas bloqueadas para evitar cargos extra" Foreground="{StaticResource Gold}" FontWeight="SemiBold"/>
-      <TextBlock Text="En ChatGPT → Uso, desactiva Permitir que otras apps usen créditos tras alcanzar el límite. Esa configuración afecta a todas las apps. Song Sense no dispone de un mecanismo oficial documentado para verificarla: por eso no envía consultas con el plan, aunque conectes tu cuenta o selecciones un modelo. No hay cambios automáticos a API key ni compra de créditos." FontSize="13" Margin="0,8,0,12"/>
+      <TextBlock Text="Habilitar consultas con tu plan" Foreground="{StaticResource Gold}" FontWeight="SemiBold"/>
+      <TextBlock Text="En ChatGPT → Uso, desactiva el permiso para que Song Sense use créditos al alcanzar el límite del plan. Comprueba que corresponde a la cuenta conectada. La app no puede verificar ese ajuste: depende de tu confirmación, no garantiza cargos cero por sí sola. La confirmación solo dura esta sesión. No cambia automáticamente a API key ni compra créditos. Habilitar no envía consultas: pulsa Traducir y explicar o Regenerar en la ventana principal." FontSize="13" Margin="0,8,0,12"/>
       <Button Content="Gestionar uso en ChatGPT" Click="ManageUsage" HorizontalAlignment="Left"/>
+      <CheckBox IsChecked="{Binding CreditsDisabledConfirmed}" Margin="0,12,0,8"><TextBlock Text="He desactivado el uso de créditos para esta cuenta y Song Sense" TextWrapping="Wrap"/></CheckBox>
+      <WrapPanel>
+       <Button Content="Habilitar consultas con mi plan" Click="EnablePlan" IsEnabled="{Binding CanEnablePlan}" Margin="0,0,8,8"/>
+       <Button Content="Pausar consultas con ChatGPT" Click="PausePlan" IsEnabled="{Binding CanPausePlan}" Margin="0,0,0,8"/>
+      </WrapPanel>
      </StackPanel>
     </Border>
     <TextBlock Text="Tokens por consulta" Foreground="{StaticResource Gold}" FontSize="17"/>
     <TextBlock Text="Cada análisis de IA muestra los tokens de entrada, salida y total comunicados por OpenAI. Si no los comunica, aparece Consumo no comunicado. Una lectura de caché utiliza 0 tokens nuevos. No se convierten tokens en porcentajes del plan: los límites se comparten con Codex y otras apps y se consultan en Gestionar uso." Foreground="{StaticResource Muted}" FontSize="13" Margin="0,8,0,16"/>
     <Button Content="Ajustes de API key · de pago" Click="OpenApiSettings" IsEnabled="{Binding IsApiMode}" HorizontalAlignment="Left" Margin="0,0,0,16"/>
    </StackPanel>
-   <Button Content="Cancelar operación" Click="CancelOperation" IsEnabled="{Binding CanCancel}" HorizontalAlignment="Left" Margin="0,0,0,12"/>
-   <TextBlock Text="{Binding Message}" Foreground="{StaticResource Gold}"/>
   </StackPanel>
  </ScrollViewer>
 </Window>

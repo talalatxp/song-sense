@@ -48,6 +48,15 @@ public sealed class ChatGptCredentialStore(string path)
     public static string DefaultPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SongSense", "ChatGptAuth", "session.dpapi");
     public string LockPath => path + ".lock";
 
+    public Task RetainPendingRegistrationAsync(string hostId, string clientId, CancellationToken token)
+    {
+        if (!IsClientId(clientId)) throw new AiException(AiFailure.InvalidSettings);
+        var backup = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, "pending-" + Guid.NewGuid().ToString("N") + ".dpapi");
+        // Preserve the unverified registration only, never copy an active account's tokens.
+        return new ChatGptCredentialStore(backup).SaveAsync(new ChatGptCredentials
+        { HostId = hostId, PendingClientId = clientId }, token);
+    }
+
     public async Task<ChatGptCredentials> ReadAsync(CancellationToken token)
     {
         if (!File.Exists(path)) return new ChatGptCredentials();

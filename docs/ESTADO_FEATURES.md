@@ -1,6 +1,18 @@
 # Estado por feature
 
-Actualizado: 8 de octubre de 2026.
+Actualizado: 21 de octubre de 2026.
+
+## Plan posterior a la auditoría UI/UX — 21 de octubre de 2026
+
+Revisado el informe H01–H50 y creado [PLAN_MEJORAS_UI_UX.md](PLAN_MEJORAS_UI_UX.md), con 14 bloques individuales UX01–UX14. Todos están **Pendientes**. El plan incluye estados y consumo veraces, protección de borrados/borradores, componentes compartidos, lectura, configuración guiada y aceptación real de escritorio/accesibilidad. No se ha implementado ninguna mejora como parte de esta planificación, ejecutado nuevas pruebas de la app ni actualizado su copia del escritorio. Los estados de F01–F11 de este documento se conservan.
+
+## Idioma compartido de traducción y explicaciones — 21 de octubre de 2026
+
+Añadido un único selector en Ajustes → Idioma con español (inicial), inglés, francés, alemán, italiano y portugués. Se aplica a traducción, resumen, temas, explicaciones de metáforas, alternativas y avisos. Las citas permanecen literales y la interfaz conserva el español. No se duplica la letra cuando ya coincide con el destino; en letras mixtas se conservan literalmente las líneas del destino, sin exigir que el español forme parte del original.
+
+El idioma se guarda localmente en una columna independiente de los ajustes de API key y de seguimiento de canción. Migración transaccional SQLite v3 → v4, repetible y sin borrar caché ni contadores; idioma inicial es. Las claves de caché incluyen el destino, manteniendo las claves históricas en español. Cambiarlo invalida y cancela el análisis en curso, descarta resultados tardíos y recupera solo el resultado guardado del mismo idioma/cuenta/modelo. Guardar o cambiar idioma nunca envía inferencia; el contador diario sigue compartido. Un error al guardar bloquea la generación y ofrece reintento del guardado.
+
+Pruebas controladas cubren las seis opciones en los dos proveedores, selección única para traducción y explicación, cachés separadas y reutilización al volver al idioma anterior, persistencia, migración desde v3, conservación de ajustes y cuota, cambios rápidos y cambios durante un análisis, error/reintento del guardado, letras mixtas y coincidencia origen/destino. Validación final: 280 pruebas correctas, cero fallos u omitidas, compilación sin avisos y auditoría de privacidad correcta. Revisión visual con canción propia en ventana normal y 380×600 DIP, incluido selector oscuro y cambio a inglés sin generar. La calidad lingüística real de los seis idiomas requiere aceptación con el proveedor; no se han enviado consultas de IA en esta revisión. El ZIP portable histórico no se regenera como parte de este cambio.
 
 ## Identidad visual y acceso de Windows — 6 de octubre de 2026
 
@@ -17,8 +29,8 @@ Cambio solicitado antes de F05: opción A, dos claves de sol y estilo dorado. Te
 | F07 — Caché local | Cerrada |
 | F08 — ChatGPT Plus sin cargos extra | Parcial: OAuth y consumo implementados; generación bloqueada por política no verificable |
 | F09 — Flujo automático | Implementada; pendiente de aceptación real con Spotify y proveedor |
-| F10 — Ventana de uso diario | Pendiente |
-| F11 — Validación y entrega | Pendiente |
+| F10 — Ventana de uso diario | Implementada; pendiente de validación real del 150 %, desconexión de monitores y menú de bandeja |
+| F11 — Validación y entrega | Implementada; ZIP validado localmente, pendiente de aceptación real de Spotify e IA |
 
 ## Cambio de ruta — 7 de octubre de 2026
 
@@ -184,3 +196,86 @@ Validación:
 - Copia autocontenida local y acceso del escritorio actualizados. Los artefactos de revisión permanecen ignorados. Auditoría de privacidad de Git y diff --check; sin staging, commit, push o publicación externa.
 
 Pendientes: secuencia real de cinco cambios en Spotify, pausa/reanudación y regreso a caché con un proveedor operativo; validación real de límites y resultados. Spotify no estaba abierto durante la revisión. La generación real con ChatGPT sigue impedida por F08; las pruebas controladas no acreditan elegibilidad, conexión ni consumo incluido. F09 no se declara cerrada hasta completar esa aceptación.
+
+## F10 — Ventana de uso diario — 8 de octubre de 2026
+
+Estado: **implementada; aceptación real parcialmente pendiente**. Se preservan F08/F09 y sus bloqueos. F11 no se inicia.
+
+- Siempre encima, inicialmente desactivado. Texto de lectura entre 12 y 24 puntos, inicialmente 16; conversión explícita de puntos a DIP de WPF. Foco dorado visible para navegación por teclado.
+- Preferencias locales independientes de la IA: posición, tamaño normal, pestaña, texto y Siempre encima. JSON versionado de tamaño limitado, escritura mediante temporal y sustitución, normalización de valores y aviso si no se pueden guardar. Archivo bajo LocalAppData, fuera del repo; no guarda canción, cuenta ni tokens.
+- Traducción por bloques de estrofa con original y español; las letras en español no se duplican. Significado conserva todos sus apartados. Desplazamiento por pestaña y diseño con scroll exterior cuando la altura es insuficiente; se corrigió el caso donde el pie comprimía el área de lectura.
+- Bandeja con icono dorado, Abrir, Pausar/Reanudar actualización y Salir; doble clic abre. Cerrar oculta la ventana, mantiene el proceso y guarda preferencias; Salir cancela y espera trabajadores, libera detector y clientes HTTP, retira el icono y termina el proceso. Botón Salir también en ventana. Sin inicio con Windows ni avisos por cada canción.
+- Una instancia por usuario/sesión de Windows: objeto nombrado local y señal de apertura por pipe restringido al usuario. El mensaje es un byte de apertura; no transmite letras ni credenciales. Una segunda apertura no inicializa detector, almacenamiento ni proveedores. La señal se aplica en el dispatcher y el foco solo cambia por una apertura explícita.
+- Restauración dentro del área de trabajo disponible al abrir/reabrir y al recibir cambios de pantalla/DPI; contempla coordenadas negativas. No se modifica la configuración del sistema.
+- Update-Desktop exige usar Salir si hay un proceso SongSense; evita intentar actualizar DLL bloqueadas cuando la ventana está escondida.
+
+Evidencia:
+
+- Suite completa **210 pruebas correctas**, cero fallos u omitidas; diez casos nuevos de geometría con monitor ausente y coordenadas negativas, valores inválidos, preferencias persistentes/corruptas/futuras, señal entre instancias y reapertura tras liberar el objeto, y estrofas en inglés/español/mixto.
+- App real: inicio, almacenamiento listo, Siempre encima, tamaño 24 y escritura de preferencias; cerrar conserva un proceso, una segunda apertura sale y reactiva la primera con el mismo PID, Salir termina el proceso. Los controles se devolvieron a 16 puntos y Siempre encima desactivado tras comprobarlos.
+- Revisión aislada sin red ni credenciales, con 20 estrofas de texto propio y resultado simulado. Ventana de 360 × 480, texto grande, original y español ajustados al ancho, scroll hasta el pie, significado, foco dorado, flechas para cambiar pestaña y Page Down dentro de lectura. El entorno de revisión reporta DPI 1 y dos monitores. Esta evidencia no equivale a comprobar el 150 % real.
+- Copia autocontenida y acceso del escritorio actualizados. Artefactos de revisión ignorados; auditoría de Git y diff --check. Sin staging, commit, push o publicación externa.
+
+Pendientes de aceptación: escala real del 150 %; mover entre pantallas de DPI diferente y desconectar físicamente una pantalla. Las pruebas de geometría controladas no sustituyen ese uso. El menú de la bandeja no fue inspeccionado mediante UI porque la herramienta no expone una ventana seleccionable del shell; se verificaron cierre/reapertura y salida desde la ventana, pero las acciones del menú requieren comprobación manual. Los bloqueos de OpenAI de F08 siguen vigentes.
+
+Comprobación final de F10: restore con --locked-mode correcto; las diez pruebas de F10 se repitieron tras los últimos ajustes y pasaron. Auditoría de privacidad: 79 archivos elegibles y 135 blobs históricos, con índice e ignorados revisados; diff --check correcto. Se confirmó que Update-Desktop rechaza una actualización mientras la app está abierta, sin tocar la copia instalada. La revisión final confirmó 20 bloques de estrofa y el ajuste de texto de 24 puntos; la copia real se dejó abierta con 16 puntos y Siempre encima desactivado. Sin cambios en el índice de Git.
+
+## F11 — Validación y entrega portable — 8 de octubre de 2026
+
+Estado: **implementada pendiente de aceptación real**. Se entrega la aplicación personal autocontenida y se preservan todos los bloqueos y pendientes anteriores. No se declara cerrada la aceptación de Spotify ni de OpenAI.
+
+- `Build-Portable.ps1`: restore bloqueado, suite Release, auditoría de Git y pruebas negativas del auditor, publicación nueva win-x64 sin trimming ni single-file, documentación, licencias, manifiesto SHA256, auditoría de carpeta y ZIP, checksum externo. No copia la app instalada ni los datos personales, no cambia los lockfiles versionados, ni actualiza automáticamente el escritorio.
+- `Test-PortablePackage.ps1`: lista de archivos permitidos, rutas y raíz ZIP seguras, duplicados, enlaces en carpeta, tamaños limitados, cabeceras de ejecutables, patrones UTF-8/UTF-16 de credenciales y perfiles, inventario requerido y hashes por archivo. No imprime el contenido coincidente. Es una protección adicional, no una garantía absoluta de seguridad ni una firma del editor.
+- Se detectaron rutas del perfil de desarrollo incrustadas por el compilador en las DLL propias. La entrega inicial se detuvo antes de crear un ZIP. PathMap remapea la raíz del proyecto a una ruta neutra; la entrega corregida pasa el mismo control sin excepciones. La revisión automática rechazó la limpieza recursiva de artefactos intermedios con «blocked by policy»; se conservan bajo artifacts/releases, ignorados por Git. Solo el ZIP final identificado en esta evidencia constituye la entrega.
+- Guía portable de apertura, conexión bloqueada de ChatGPT y alternativa de API explícita de pago, consumo comunicado o desconocido, límite local, almacenamiento, borrado y errores. Matriz controlada/real en VALIDACION_F11.md. Licencias y avisos de paquetes y runtimes originales incluidos.
+
+Evidencia:
+
+- Suite completa: **213 pruebas correctas, cero fallos y cero omitidas**. Tres casos nuevos usan SQLite real y proveedor desconectado: reinicio y lectura guardada en inglés, español y mixto, estrofas correctas, cero tokens nuevos y ninguna llamada; canción nueva sin resultado con fallo de red y cero análisis o reservas de presupuesto.
+- Auditor: dos fixtures válidos aceptados y siete rechazados (base personal, clave simulada, ruta de perfil, alteración de hash, traversal, duplicado y PDB). Datos exclusivamente sintéticos y directorios de pruebas ignorados.
+- NuGet no informó vulnerabilidades conocidas en las dependencias directas y transitivas de la aplicación, consultando https://api.nuget.org/v3/index.json el 8 de octubre. No acredita ausencia de vulnerabilidades nuevas o no publicadas.
+- Entrega `SongSense-win-x64-F11-20261008-115736-11d1d4.zip`: **503 archivos**, 85.905.497 bytes. SHA256: `806A5F73D61A7B12DCA67636045F7643F3D396EA8A6A6E7B4E8173355326C462`. Carpeta, ZIP y carpeta extraída auditados. Runtime .NET y Windows Desktop 10.0.12 incluidos; licencia MIT y avisos originales conservados. No se incluye SDK, base personal, sesiones, claves, fuentes, PDB ni letras de pruebas.
+- ZIP extraído bajo LocalAppData/SongSensePortableReview, fuera del repositorio. App abierta y observada en Windows: interfaz dorada, 16 puntos, Siempre encima desactivado, estado Sin Spotify, almacenamiento listo, ChatGPT sin sesión y generación deshabilitada. Se comprobó identidad SHA256 del EXE extraído con el publicado y **Salir** dejó cero procesos SongSense. La primera búsqueda de ventana del helper tardó en descubrirla; la observación posterior y cierre fueron correctos.
+- No se enviaron consultas de pago, no se registraron cuentas ni se manipularon credenciales. Los datos personales locales se conservaron. Sin staging, commit, push ni publicación externa.
+
+Pendientes: Spotify no estaba en ejecución durante esta revisión. Siguen pendientes la matriz real de canciones, reinicio de Spotify, red físicamente desconectada y repetición real sin consumo. F05/F06 requieren acceso y modelo autorizados; F08 sigue bloqueada por permiso/política y no implementa generación ChatGPT; F09 conserva aceptación de flujo real y F10 las configuraciones visuales no disponibles. Todas estas limitaciones impiden cerrar F11 aunque el ZIP compile, se audite y abra correctamente.
+
+## Recuperación de registro ChatGPT con otra cuenta — 8 de octubre de 2026
+
+El registro pendiente conserva su vínculo con la cuenta y el espacio originales. Cambiar únicamente la cuenta en el navegador al continuar ese registro puede impedir la autorización. Se añade «Conectar una cuenta distinta» exclusivamente cuando existe un registro pendiente y ninguna cuenta verificada: conserva el registro anterior mediante DPAPI en el directorio privado local antes de preparar un registro nuevo, mantiene el identificador del equipo y exige una acción explícita. No cambia cuentas verificadas ni habilita generación ChatGPT. El botón de cancelación queda visible al principio de la ventana.
+
+Validación controlada: 30 pruebas de conexión correctas, incluidos cambio de cuenta con archivo cifrado, conservación del identificador local, cancelación, prevención de intentos simultáneos y rechazo de sustitución de cuentas verificadas. No se ha validado todavía la autorización real del proveedor. El ZIP F11 ya entregado no incorpora esta corrección.
+
+La suite completa posterior ejecutó 215 pruebas: 214 correctas y una cancelación por tiempo de espera en la prueba de callback denegado. La repetición aislada de los cuatro escenarios del mismo test pasó (4/4). Se conserva esta incidencia como limitación de estabilidad de la validación; no se presenta la primera ejecución como limpia.
+
+## Corrección del catálogo y selección de modelos — 8 de octubre de 2026
+
+Diagnóstico real de solo lectura: la sesión activa tiene permiso de uso del plan; GET /v1/models devuelve HTTP 200, diez entradas y siete visibles. El catálogo ocupa 613.963 bytes y superaba el límite anterior de 524.288 bytes. No se imprimieron identidades, tokens ni cuerpos de respuesta y no se enviaron consultas de inferencia. El comprobador temporal permanece bajo artifacts, ignorado por Git.
+
+La lectura del catálogo admite hasta 4 MiB y conserva los límites de cantidad de entradas, duración y formato. El límite menor de identidad y credenciales permanece intacto; se valida el tamaño tanto declarado como leído, incluso sin Content-Length. La pantalla muestra progreso, cantidad de modelos, catálogo vacío o error junto al selector, desactiva selección y guardado cuando no corresponde y permite cancelar. Guardar modelo captura la elección antes de sincronizar el estado, evitando perderla al iniciar la operación. La generación ChatGPT sigue bloqueada según las condiciones anteriores.
+
+Validación: 37 pruebas de conexión correctas, cero fallos u omitidas. Siete casos nuevos cubren catálogo grande aceptado, límite excedido con y sin longitud declarada, progreso y prevención de consultas simultáneas, catálogo vacío, rechazo HTTP 403 sin borrar sesión y persistencia del modelo elegido. La repetición real de la lectura con el código corregido obtiene los siete modelos visibles. El ZIP F11 anterior no incorpora esta corrección.
+
+## Diagnóstico del significado bloqueado — 9 de octubre de 2026
+
+La conexión ChatGPT y el modelo guardado no habilitan inferencia: CanGenerate permite exclusivamente el modo API key explícito. ConnectionInsightProvider tampoco implementa generación ChatGPT. Se conserva este límite porque no hay verificación documentada por petición de uso exclusivo de cuota incluida, sin créditos. No se enviaron peticiones de inferencia ni se cambió el modo de facturación.
+
+Se corrige el aviso engañoso «IA sin configurar» tras confirmar una letra: el estado usa la capacidad efectiva del modo activo y muestra el estado ChatGPT y su bloqueo. El panel de traducción explica que guardar cuenta y modelo no habilita el significado. La caché y los estados de error, pausa y procesamiento mantienen su precedencia. Validación: 89 pruebas de conexión, significado y letras correctas, cero fallos y omitidas, incluida la regresión de cuenta y modelo guardados con generación bloqueada. La generación de significado con Plus sigue sin implementarse y no se considera resuelta por este cambio de mensajes.
+
+## Generación de significado con ChatGPT — 9 de octubre de 2026
+
+Aceptación real posterior: la usuaria confirma que la generación ya funciona. A continuación se simplifica la ventana principal: Cuenta en la cabecera, acción principal contextual (buscar letra o traducir), acciones secundarias en Más, resumen de consumo visible, ajustes y diagnósticos plegados, lectura ampliada y detalles de interpretación desplegables. Se conserva la identidad dorada, acceso por teclado, preferencias de texto/ventana y generación exclusivamente manual. Validación: compilación sin avisos, 61 pruebas de escritorio/análisis/flujo correctas y revisión visual con datos propios en 860×780 y 380×600 DIP, sin inferencias de red ni uso de la caché personal. Se comprueban lectura, menú, ajustes y apertura del significado desde el inicio del resumen.
+
+Corrección posterior de EmptyOutput: se conservan en memoria los elementos y bloques de texto terminados del stream y se ensamblan cuando response.completed trae output vacío. Solo se acepta el resultado tras ese evento terminal, validación del estado y validación de traducción/significado. No se usan deltas parciales como resultado, se rechazan huecos y bloques contradictorios, y se conserva el consumo del evento terminal incluso si la reconstrucción falla. El estado opcional de los mensajes no se exige cuando la respuesta ya está completada; un estado explícitamente incompleto sigue rechazándose. Pruebas controladas cubren eventos separados, texto terminado sin elemento repetido en el evento final, rechazo, interrupción, contenido en progreso, conflictos y huecos. No se realiza una consulta real durante la revisión y se mantiene la generación exclusivamente manual.
+
+Cambio solicitado posteriormente: la IA solo se consulta mediante Traducir y explicar o Regenerar. El trabajador automático conserva detección, búsqueda de letra y recuperación de caché, pero no llama al proveedor de IA, tampoco al reanudar ni mediante Reintentar flujo. Pruebas adaptadas verifican cambios rápidos, reproducción, reanudación, reintento de flujo, análisis manual cancelado por cambio de canción y caché. La suite completa de 248 casos pasa y 31 casos del proveedor pasan tras añadir cinco regresiones de estructura de respuesta. Se permiten varios bloques output_text concatenados, sujetos a la misma validación estricta del resultado. Los errores finales incluyen un código de estructura enumerado, sin conservar contenido privado. El fallo real de respuesta final sigue pendiente de identificar con ese diagnóstico; no se envían consultas durante la revisión.
+
+Implementada la vía OAuth POST /v1/responses con store=false y stream=true, modelo guardado, instrucciones y esquema existentes y únicamente letra numerada. Se espera response.completed, se valida el formato y cada línea, se comunica usage de entrada/salida/total y no se muestran resultados parciales. Se aplica duración máxima de tres minutos y lectura acotada a 4 MiB; no se reintentan generaciones ni se cambia a API key.
+
+Corrección posterior de recepción: una consulta real devolvió HTTP 200 y fue rechazada antes de leer el cuerpo por una comprobación exacta de Content-Type. Se solicita Accept: text/event-stream y se valida el contenido sin depender de esa cabecera. Se consumen eventos terminales sin esperar el cierre; una respuesta JSON completa se valida con las mismas reglas y los errores JSON con HTTP 200 se distinguen del éxito. Los diagnósticos muestran etapa, estado HTTP y códigos enumerados, nunca texto libre del proveedor ni credenciales. Validación controlada: 248 pruebas correctas, incluidos eventos con cabecera ausente o distinta, JSON completo con consumo, errores HTTP 200, errores de eventos y conexión abierta después del evento terminal. No se enviaron inferencias durante esta revisión; la aceptación real posterior continúa pendiente.
+
+La habilitación requiere confirmación manual de créditos desactivados en ChatGPT para esta cuenta y aplicación, por sesión. No es una comprobación del proveedor ni una garantía de cargos cero: se informa en pantalla. Reinicio, cambio de cuenta o modo, nuevo login y rechazo de cuota/autenticación deshabilitan el uso; pausar cancela una petición activa. La configuración externa sigue siendo responsabilidad de la persona usuaria. La interfaz incluye Gestionar uso y confirma que la actualización automática puede generar tras habilitar. La aceptación estricta de solo cuota incluida no se declara cerrada.
+
+Credenciales releídas bajo el mismo bloqueo entre procesos que ajustes y API; renovación y guardado atómico del refresh token antes de usar la sesión nueva. La cuota local usa el contador diario compartido, con reserva SQLite atómica, sin requerir ni activar ai_enabled de la API key. Los análisis conservan caché por cuenta/modelo y las protecciones contra cambios de canción/letra/configuración.
+
+Validación: suite completa de 231 pruebas correctas, cero fallos y omitidas. Nueve casos nuevos verifican habilitación explícita, sesión nueva pausada, cuerpo OAuth permitido, ausencia de título/artista, prohibición de fallback API, traducción/significado y tokens, stream interrumpido, incompleto, negativa, error de cuota, JSON inválido con uso comunicado, renovación durable, presupuesto con API desactivada, cambios de modo persistidos y pausa de peticiones activas. Toda la inferencia de pruebas es simulada con textos propios; no se ha enviado inferencia real con la cuenta personal. El catálogo y login reales ya estaban validados. El ZIP F11 del 8 de octubre no se ha regenerado y no incorpora este cambio.

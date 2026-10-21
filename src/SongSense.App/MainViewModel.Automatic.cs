@@ -11,7 +11,7 @@ public sealed partial class MainViewModel
     private CancellationTokenSource? automaticRequest;
     private Task automaticWorker = Task.CompletedTask;
     private TrackDetection latestObservation = new(ApplicationState.NoSpotify, null, null);
-    private string automaticMessage = "Actualización automática activada · IA sujeta a configuración y límites.";
+    private string automaticMessage = "Actualización automática activada · IA solo al pulsar Traducir y explicar.";
     public string AutomaticMessage => !AutomaticUpdatesEnabled ? "Actualización pausada · Contenido congelado" : automaticMessage;
     public bool AutomaticUpdatesEnabled
     {
@@ -117,7 +117,7 @@ public sealed partial class MainViewModel
                     else if (Insight is not null)
                         automaticMessage = "Resultado recuperado de caché · 0 tokens nuevos.";
                     else if (insightState is ApplicationState.Error or ApplicationState.Offline)
-                        automaticMessage = "El análisis anterior falló. Reintentar flujo es una acción explícita.";
+                        automaticMessage = "El análisis anterior falló. Pulsa Traducir y explicar para volver a consultar IA.";
                     else if (!CanUseAi)
                         automaticMessage = connection?.Mode == AiConnectionMode.ChatGptIncluded ? connection.Status : "Letra lista · IA desactivada o conexión no disponible.";
                     else if (!AiSettingsRules.IsValidModel(EffectiveModel))
@@ -127,12 +127,7 @@ public sealed partial class MainViewModel
                         await RefreshAiUsageAsync();
                         if (!AutomaticContextCurrent(track, sequence, request.Token)) continue;
                         if (!HasQuota) automaticMessage = "Letra lista · Límite diario alcanzado. No se ha enviado una consulta.";
-                        else
-                        {
-                            await GenerateInsightAsync();
-                            if (!AutomaticContextCurrent(track, sequence, request.Token)) continue;
-                            automaticMessage = Insight is not null ? "Flujo completado para la canción actual." : "Flujo detenido. Reintentar flujo es una acción explícita; no se repite automáticamente.";
-                        }
+                        else automaticMessage = "Letra lista · Pulsa Traducir y explicar para consultar IA.";
                     }
                     NotifyAutomatic();
                 }

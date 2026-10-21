@@ -23,9 +23,12 @@ public partial class ConnectionWindow : Window
     }
     private async void Connect(object sender, RoutedEventArgs args) => await viewModel.ConnectAsync(false);
     private async void AddAccount(object sender, RoutedEventArgs args) => await viewModel.ConnectAsync(true);
+    private async void ChangePendingAccount(object sender, RoutedEventArgs args) => await viewModel.ChangePendingAccountAsync();
     private async void SelectAccount(object sender, RoutedEventArgs args) => await viewModel.SelectAccountAsync();
     private async void SelectModel(object sender, RoutedEventArgs args) => await viewModel.SelectModelAsync();
     private async void LoadModels(object sender, RoutedEventArgs args) => await viewModel.ModelsAsync();
+    private async void EnablePlan(object sender, RoutedEventArgs args) => await viewModel.EnablePlanAsync();
+    private async void PausePlan(object sender, RoutedEventArgs args) => await viewModel.PausePlanAsync();
     private async void Disconnect(object sender, RoutedEventArgs args) => await viewModel.DisconnectAsync();
     private async void UseChatGpt(object sender, RoutedEventArgs args) => await viewModel.ModeAsync(AiConnectionMode.ChatGptIncluded);
     private async void UseApiKey(object sender, RoutedEventArgs args) => await viewModel.ModeAsync(AiConnectionMode.ApiKey);

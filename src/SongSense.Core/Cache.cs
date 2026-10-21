@@ -10,8 +10,8 @@ public interface ICacheStore
 {
     Task<CachedSong?> ReadSongAsync(CurrentTrack track, CancellationToken token = default);
     Task SaveLyricsAsync(CurrentTrack track, ResolvedLyrics? lyrics, CancellationToken token = default);
-    Task<SongInsight?> ReadInsightAsync(ResolvedLyrics lyrics, string model, string version, CancellationToken token = default, CurrentTrack? track = null, string scope = "api-key");
-    Task SaveInsightAsync(CurrentTrack track, ResolvedLyrics lyrics, string model, string version, SongInsight insight, CancellationToken token = default, string scope = "api-key");
+    Task<SongInsight?> ReadInsightAsync(ResolvedLyrics lyrics, string model, string version, CancellationToken token = default, CurrentTrack? track = null, string scope = "api-key", string targetLanguage = OutputLanguages.Default);
+    Task SaveInsightAsync(CurrentTrack track, ResolvedLyrics lyrics, string model, string version, SongInsight insight, CancellationToken token = default, string scope = "api-key", string targetLanguage = OutputLanguages.Default);
     Task DeleteSongAsync(CurrentTrack track, CancellationToken token = default);
     Task ClearAsync(CancellationToken token = default);
 }
@@ -29,11 +29,12 @@ public static class CacheIdentity
     public static bool IsUnambiguous(CurrentTrack track) => !string.IsNullOrWhiteSpace(track.Title) && !string.IsNullOrWhiteSpace(track.Artist) && !string.IsNullOrWhiteSpace(track.Album) && track.Duration is { TotalSeconds: > 0 };
     public static string Song(CurrentTrack track) => Hash(new { title = Normalize(track.Title), artist = Normalize(track.Artist), album = Normalize(track.Album ?? ""), duration = track.Duration is { } duration ? (long?)Math.Round(duration.TotalMilliseconds) : null });
     // Normalize line endings only: spaces, stanzas, repetitions and version labels remain significant.
-    public static string Analysis(ResolvedLyrics lyrics, string model, string version, string scope = "api-key")
+    public static string Analysis(ResolvedLyrics lyrics, string model, string version, string scope = "api-key", string targetLanguage = OutputLanguages.Default)
     {
+        _ = OutputLanguages.Get(targetLanguage);
         var text = lyrics.Text.Replace("\r\n", "\n").Replace('\r', '\n');
-        return scope == "api-key" ? Hash(new { text, target = "es", provider = "openai", model, version }) :
-            Hash(new { text, target = "es", provider = "openai", model, version, scope });
+        return scope == "api-key" ? Hash(new { text, target = targetLanguage, provider = "openai", model, version }) :
+            Hash(new { text, target = targetLanguage, provider = "openai", model, version, scope });
     }
     public static string Serialize(SongInsight insight) => JsonSerializer.Serialize(new
     {

@@ -60,7 +60,7 @@ public sealed class CacheTests : IDisposable
         var (store, _) = await Setup(); await store.InitializeAsync();
         Assert.Equal(new AppSettings(false, "chosen-model", 42), await store.ReadSettingsAsync());
         Assert.Equal(17, await store.ReadRequestCountAsync(new(2026, 10, 7)));
-        Assert.Equal(3, Scalar("PRAGMA user_version;"));
+        Assert.Equal(4, Scalar("PRAGMA user_version;"));
         Assert.True(await store.ReadAutomaticUpdatesAsync());
     }
 

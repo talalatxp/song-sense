@@ -10,8 +10,9 @@ public static partial class InsightValidation
     public static IReadOnlyList<LyricLine> Lines(string text) => text.Replace("\r\n", "\n").Replace('\r', '\n')
         .Split('\n').Select((line, index) => new LyricLine(index + 1, line)).ToArray();
 
-    public static SongInsight Parse(long trackRevision, string lyrics, string json)
+    public static SongInsight Parse(long trackRevision, string lyrics, string json, string targetLanguage = OutputLanguages.Default)
     {
+        _ = OutputLanguages.Get(targetLanguage);
         try
         {
             using var document = JsonDocument.Parse(json);
@@ -48,7 +49,7 @@ public static partial class InsightValidation
                 if (translatedText.Contains('\n') || translatedText.Contains('\r')) Invalid();
                 translation.Add(new(id, translatedText, sourceLanguage));
             }
-            if (language == "es")
+            if (language == targetLanguage)
             {
                 if (translation.Count != 0) Invalid();
             }
@@ -57,13 +58,13 @@ public static partial class InsightValidation
                 if (!translation.Select(line => line.Id).SequenceEqual(lines.Select(line => line.Id))) Invalid();
                 if (language == "mixed")
                 {
-                    if (!translation.Any(line => line.SourceLanguage == "es") || !translation.Any(line => line.SourceLanguage != "es")) Invalid();
+                    if (translation.Select(line => line.SourceLanguage).Distinct().Count() < 2) Invalid();
                     for (var index = 0; index < lines.Length; index++)
-                        if (translation[index].SourceLanguage == "es" && translation[index].Text != lines[index].Text) Invalid();
+                        if (translation[index].SourceLanguage == targetLanguage && translation[index].Text != lines[index].Text) Invalid();
                 }
                 else if (translation.Any(line => line.SourceLanguage != language)) Invalid();
             }
-            return new(trackRevision, language, translation, summary, themes, metaphors, alternatives, warnings);
+            return new(trackRevision, language, translation, summary, themes, metaphors, alternatives, warnings) { TargetLanguage = targetLanguage };
         }
         catch (JsonException) { throw new AiException(AiFailure.InvalidResponse); }
         catch (InvalidOperationException) { throw new AiException(AiFailure.InvalidResponse); }
@@ -72,7 +73,7 @@ public static partial class InsightValidation
 
     public static string TranslationText(string lyrics, SongInsight insight)
     {
-        if (insight.Language == "es") return "";
+        if (insight.Language == insight.TargetLanguage) return "";
         var byId = insight.Translation.ToDictionary(line => line.Id, line => line.Text);
         return string.Join('\n', Lines(lyrics).Select(line => byId.TryGetValue(line.Id, out var text) ? text : line.Text));
     }

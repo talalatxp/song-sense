@@ -21,7 +21,7 @@ public sealed class StorageTests : IDisposable
         using var connection = OpenDatabase();
         using var command = connection.CreateCommand();
         command.CommandText = "PRAGMA user_version;";
-        Assert.Equal(3L, command.ExecuteScalar());
+        Assert.Equal(4L, command.ExecuteScalar());
         command.CommandText = "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name;";
         using var reader = command.ExecuteReader();
         var tables = new List<string>();

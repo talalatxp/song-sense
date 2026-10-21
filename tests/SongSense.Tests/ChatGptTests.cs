@@ -128,6 +128,9 @@ public sealed class ChatGptTests : IDisposable
         await vm.InitializeAsync(); vm.ApplyDetection(new(ApplicationState.Playing, Track(), null));
         Assert.Null(vm.SaveManual(vm.BeginLyricsEdit()!, Lyrics().Text));
         Assert.False(vm.GenerateInsightCommand.CanExecute(null)); Assert.False(vm.RegenerateCommand.CanExecute(null));
+        Assert.Equal(restarted.Status, vm.Status);
+        Assert.DoesNotContain("sin configurar", vm.Status, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("consultas con ChatGPT están pausadas", vm.TranslationMessage);
         await vm.GenerateInsightAsync(); Assert.Equal(1, spy.Calls);
     }
 
@@ -240,6 +243,63 @@ public sealed class ChatGptTests : IDisposable
         Assert.Equal(ClientId, authorize!["client_id"]); Assert.False(authorize.ContainsKey("agent_name_hint"));
     }
 
+    [Fact]
+    public async Task ExplicitAccountChangeArchivesPendingRegistrationAndStartsFreshWithoutLosingHost()
+    {
+        var original = new ChatGptCredentials { PendingClientId = ClientId };
+        await Store.SaveAsync(original, CancellationToken.None);
+        using var http = new HttpClient(new Handler(_ => throw new InvalidOperationException("No external request expected")));
+        var connection = new ChatGptConnection(Store, new ChatGptOAuthClient(http));
+        await connection.InitializeAsync(CancellationToken.None);
+        Dictionary<string, string>? request = null;
+        var opened = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        int browserCalls = 0;
+        using var vm = new ConnectionViewModel(connection, CancellationToken.None, uri =>
+        { browserCalls++; request = Query(uri.Query); opened.TrySetResult(); });
+        Assert.True(vm.CanChangePendingAccount);
+        var operation = vm.ChangePendingAccountAsync();
+        await opened.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        try
+        {
+            Assert.False(vm.CanManage); Assert.True(vm.CanCancel);
+            await vm.ChangePendingAccountAsync();
+            Assert.Equal(1, browserCalls);
+            Assert.Equal("dynamic_agent_client", request!["client_id"]);
+            Assert.Equal(original.HostId, request["ext_agent_host_id"]);
+            var backupPath = Assert.Single(Directory.GetFiles(directory, "pending-*.dpapi"));
+            var archived = await new ChatGptCredentialStore(backupPath).ReadAsync(CancellationToken.None);
+            Assert.Equal(ClientId, archived.PendingClientId);
+            Assert.Equal(original.HostId, archived.HostId);
+            Assert.Empty(archived.Registrations);
+            Assert.DoesNotContain(ClientId, Encoding.UTF8.GetString(await File.ReadAllBytesAsync(backupPath)));
+            Assert.Null((await Store.ReadAsync(CancellationToken.None)).PendingClientId);
+        }
+        finally { vm.Cancel(); await operation; }
+        Assert.True(vm.CanManage); Assert.False(vm.CanCancel); Assert.False(connection.CanGenerate);
+        Assert.Equal(ChatGptLoginOutcome.Cancelled, connection.LoginOutcome);
+        await vm.StopAsync();
+    }
+
+    [Fact]
+    public async Task PendingRecoveryCannotReplaceVerifiedAccountsOrRunWithoutPendingRegistration()
+    {
+        using var http = new HttpClient(new Handler(_ => throw new InvalidOperationException("No network expected")));
+        var connection = new ChatGptConnection(Store, new ChatGptOAuthClient(http));
+        await connection.InitializeAsync(CancellationToken.None);
+        await Assert.ThrowsAsync<AiException>(() => connection.PrepareDifferentAccountAsync(CancellationToken.None));
+        var original = new ChatGptCredentials { PendingClientId = ClientId, ActiveClientId = "oaiapp_verified" };
+        original.Registrations.Add(new() { ClientId = original.ActiveClientId, Subject = "verified", AccessToken = "synthetic-access", RefreshToken = "synthetic-refresh" });
+        await Store.SaveAsync(original, CancellationToken.None);
+        await connection.InitializeAsync(CancellationToken.None);
+        Assert.False(connection.CanReplaceUnverifiedRegistration);
+        await Assert.ThrowsAsync<AiException>(() => connection.PrepareDifferentAccountAsync(CancellationToken.None));
+        var retained = await Store.ReadAsync(CancellationToken.None);
+        Assert.Equal(ClientId, retained.PendingClientId);
+        Assert.Equal(original.ActiveClientId, retained.ActiveClientId);
+        Assert.Equal("synthetic-access", Assert.Single(retained.Registrations).AccessToken);
+        Assert.Empty(Directory.GetFiles(directory, "pending-*.dpapi"));
+    }
+
     [Theory]
     [InlineData(false)] [InlineData(true)]
     public async Task BrowserConfirmsConnectionOnlyAfterValidatedSessionIsSaved(bool failSave)
@@ -343,6 +403,81 @@ public sealed class ChatGptTests : IDisposable
         using var http = new HttpClient(handler); var connection = new ChatGptConnection(store, new ChatGptOAuthClient(http));
         await connection.InitializeAsync(CancellationToken.None); await connection.LoadModelsAsync(CancellationToken.None);
         Assert.Equal(2, handler.Calls); Assert.False(connection.CanGenerate);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task ModelCatalogAcceptsCapabilitiesAboveCredentialLimitButKeepsBoundedReading(bool unknownLength, bool oversized)
+    {
+        // Synthetic capability text reproduces the catalog size without private data.
+        var body = JsonSerializer.Serialize(new { models = new[] {
+            new { visibility = "list", slug = "model-a", display_name = "Modelo A", capabilities = new string('x', oversized ? 4 * 1024 * 1024 : 614_000) },
+            new { visibility = "hidden", slug = "model-hidden", display_name = "Oculto", capabilities = "" }
+        } });
+        using var http = new HttpClient(new Handler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        { Content = unknownLength ? new UnknownLengthContent(body) : new StringContent(body) })));
+        var oauth = new ChatGptOAuthClient(http);
+        var account = new ChatGptRegistration { AccessToken = "test-access", RefreshToken = "test-refresh", Scopes = [ChatGptOAuthClient.PlanScope] };
+        if (oversized)
+        {
+            var error = await Assert.ThrowsAsync<AiException>(() => oauth.ModelsAsync(account, CancellationToken.None));
+            Assert.Equal(AiFailure.InvalidResponse, error.Failure);
+        }
+        else
+        {
+            var models = await oauth.ModelsAsync(account, CancellationToken.None);
+            Assert.Equal("model-a", Assert.Single(models).Slug);
+        }
+    }
+
+    [Theory]
+    [InlineData(0, HttpStatusCode.OK)]
+    [InlineData(1, HttpStatusCode.OK)]
+    [InlineData(0, HttpStatusCode.Forbidden)]
+    public async Task ModelPickerShowsProgressAndOutcomeWithoutLosingSession(int count, HttpStatusCode status)
+    {
+        var store = Store;
+        await store.SaveAsync(new ChatGptCredentials { ActiveClientId = ClientId, Registrations = [new ChatGptRegistration {
+            ClientId = ClientId, Subject = "test-subject", AccessToken = "test-access", RefreshToken = "test-refresh",
+            ExpiresAt = DateTimeOffset.UtcNow.AddHours(1), Scopes = [ChatGptOAuthClient.PlanScope]
+        }] }, CancellationToken.None);
+        var response = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var handler = new Handler(_ => { started.SetResult(); return response.Task; });
+        using var http = new HttpClient(handler);
+        var connection = new ChatGptConnection(store, new ChatGptOAuthClient(http));
+        await connection.InitializeAsync(CancellationToken.None);
+        using var view = new ConnectionViewModel(connection, CancellationToken.None);
+        var loading = view.ModelsAsync();
+        Assert.Contains("Consultando modelos", view.ModelMessage);
+        Assert.False(view.CanLoadModels); Assert.False(view.CanSaveModel); Assert.True(view.CanCancel);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await view.ModelsAsync(); Assert.Equal(1, handler.Calls);
+        response.SetResult(status == HttpStatusCode.OK
+            ? Json(new { models = Enumerable.Range(0, count).Select(_ => new { visibility = "list", slug = "model-a", display_name = "Modelo A" }).ToArray() })
+            : Json(new { error = "access_denied" }, status));
+        await loading;
+        Assert.True(view.CanLoadModels); Assert.False(view.CanCancel); Assert.True(connection.Connected); Assert.False(connection.CanGenerate);
+        if (status == HttpStatusCode.Forbidden)
+        { Assert.Contains("HTTP 403", view.ModelMessage); Assert.False(view.CanSelectModel); }
+        else if (count == 0)
+        { Assert.Contains("no devolvió modelos", view.ModelMessage); Assert.False(view.CanSelectModel); }
+        else
+        {
+            Assert.Contains("1 modelos disponibles", view.ModelMessage); Assert.True(view.CanSelectModel);
+            view.SelectedModel = "model-a"; Assert.True(view.CanSaveModel);
+            await view.SelectModelAsync(); Assert.Equal("model-a", connection.Model);
+        }
+        Assert.True((await store.ReadAsync(CancellationToken.None)).Registrations[0].HasSession);
+    }
+
+    private sealed class UnknownLengthContent(string body) : HttpContent
+    {
+        protected override bool TryComputeLength(out long length) { length = 0; return false; }
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) => stream.WriteAsync(Encoding.UTF8.GetBytes(body)).AsTask();
     }
 
     private static CurrentTrack Track() => new(1, "Own song", "Test artist", "Test album", TimeSpan.FromMinutes(3), PlaybackState.Playing);

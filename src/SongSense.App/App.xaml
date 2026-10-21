@@ -1,6 +1,6 @@
 <Application x:Class="SongSense.App.App"
  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
- xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" ShutdownMode="OnMainWindowClose">
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" ShutdownMode="OnExplicitShutdown">
  <Application.Resources>
   <SolidColorBrush x:Key="Canvas" Color="#11110F" />
   <SolidColorBrush x:Key="Surface" Color="#1B1A16" />
@@ -9,6 +9,9 @@
   <SolidColorBrush x:Key="Gold" Color="#E8C882" />
   <SolidColorBrush x:Key="Ink" Color="#F5F0E5" />
   <SolidColorBrush x:Key="Muted" Color="#BEB7A6" />
+  <Style x:Key="{x:Static SystemParameters.FocusVisualStyleKey}" TargetType="Control">
+   <Setter Property="Template"><Setter.Value><ControlTemplate><Border BorderBrush="{StaticResource Gold}" BorderThickness="2" Margin="-3" CornerRadius="3" /></ControlTemplate></Setter.Value></Setter>
+  </Style>
   <Style TargetType="Window">
    <Setter Property="Background" Value="{StaticResource Canvas}" />
    <Setter Property="Foreground" Value="{StaticResource Ink}" />

@@ -30,29 +30,42 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        ReadingTabs.SelectionChanged += (_, args) =>
+        {
+            if (!ReferenceEquals(args.OriginalSource, ReadingTabs)) return;
+            Dispatcher.BeginInvoke(() => {
+                if (ReadingTabs.SelectedIndex == 1) MeaningScroll.ScrollToTop(); else TranslationScroll.ScrollToTop();
+            }, System.Windows.Threading.DispatcherPriority.ContextIdle);
+        };
         SourceInitialized += (_, _) => WindowAppearance.Apply(this);
     }
     private void AdaptReadingLayout(object sender, SizeChangedEventArgs args)
+        => ApplyReadingLayout();
+    private void ReflowOptions(object sender, RoutedEventArgs args)
     {
-        if (TranslationPreview is null || TranslationColumn is null) return;
-        var wide = ActualWidth >= 700;
-        System.Windows.Controls.Grid.SetColumn(TranslationPreview, wide ? 1 : 0);
-        System.Windows.Controls.Grid.SetRow(TranslationPreview, wide ? 0 : 1);
-        TranslationPreview.Margin = wide ? new Thickness(14, 0, 0, 0) : new Thickness(0, 10, 0, 0);
-        TranslationRow.Height = wide ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
-        TranslationColumn.Width = wide ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
-        var shortWindow = ActualHeight < 700 || !wide;
+        if (!ReferenceEquals(args.OriginalSource, OptionsPanel)) return;
+        ApplyReadingLayout();
+        if (OptionsPanel.IsExpanded) Dispatcher.BeginInvoke(WindowViewport.ScrollToEnd, System.Windows.Threading.DispatcherPriority.ContextIdle);
+    }
+    private void ApplyReadingLayout()
+    {
+        if (ReadingTabs is null) return;
+        var shortWindow = ActualHeight < 600 || ActualWidth < 600 || OptionsPanel?.IsExpanded == true;
         WindowViewport.VerticalScrollBarVisibility = shortWindow ? System.Windows.Controls.ScrollBarVisibility.Auto : System.Windows.Controls.ScrollBarVisibility.Disabled;
-        ReadingTabs.Height = shortWindow ? (wide ? 320 : 440) : double.NaN;
-        HeaderBlock.MaxHeight = shortWindow ? 48 : double.PositiveInfinity;
-        RootGrid.Margin = new Thickness(shortWindow ? 16 : 24);
-        HeaderBlock.Margin = new Thickness(0, 0, 0, shortWindow ? 10 : 18);
-        BrandTagline.Visibility = shortWindow ? Visibility.Collapsed : Visibility.Visible;
-        SongCard.Padding = new Thickness(shortWindow ? 12 : 18);
-        SongCard.Margin = new Thickness(0, 0, 0, shortWindow ? 10 : 18);
-        TrackMetadata.Visibility = shortWindow ? Visibility.Collapsed : Visibility.Visible;
-        TrackTitleText.FontSize = shortWindow ? 22 : 26;
-        ActionsPanel.Margin = new Thickness(0, shortWindow ? 12 : 0, 0, 0);
+        ReadingTabs.Height = shortWindow ? Math.Clamp(ActualHeight - 310, 220, 460) : double.NaN;
+        ReadingTabs.MinHeight = 200;
+        RootGrid.Margin = new Thickness(shortWindow ? 16 : 28);
+        HeaderBlock.Margin = new Thickness(0, 0, 0, 16);
+        SongCard.Padding = new Thickness(shortWindow ? 16 : 18);
+        SongCard.Margin = new Thickness(0, 0, 0, shortWindow ? 14 : 20);
+        TrackMetadata.Visibility = Visibility.Collapsed;
+        TrackTitleText.FontSize = shortWindow ? 24 : 32;
+        ActionsPanel.Margin = new Thickness(0, 18, 0, 0);
+    }
+    private void OpenSongMenu(object sender, RoutedEventArgs args)
+    {
+        if (sender is System.Windows.Controls.Button { ContextMenu: { } menu } button)
+        { menu.PlacementTarget = button; menu.IsOpen = true; }
     }
     private void ChangeLyrics(object sender, RoutedEventArgs args)
     {

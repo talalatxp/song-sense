@@ -4,11 +4,11 @@ using SongSense.Core;
 
 namespace SongSense.Infrastructure;
 
-public sealed class SqliteSettingsStore(string databasePath) : ISettingsStore, IRequestBudget, IRecoverableSettingsStore, IAutomaticUpdateSettings
+public sealed class SqliteSettingsStore(string databasePath) : ISettingsStore, IRequestBudget, IRecoverableSettingsStore, IAutomaticUpdateSettings, IOutputLanguageSettings
 {
     public bool CanRecover { get; private set; }
     public string RecoveryMessage { get; private set; } = "";
-    public const int SchemaVersion = 3;
+    public const int SchemaVersion = 4;
     public static string DefaultDatabasePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SongSense", "songsense.db");
 
@@ -89,6 +89,11 @@ public sealed class SqliteSettingsStore(string databasePath) : ISettingsStore, I
         if (version < 3)
         {
             command.CommandText = "ALTER TABLE app_settings ADD COLUMN automatic_updates INTEGER NOT NULL DEFAULT 1 CHECK(automatic_updates IN (0,1)); PRAGMA user_version = 3;";
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        if (version < 4)
+        {
+            command.CommandText = "ALTER TABLE app_settings ADD COLUMN output_language TEXT NOT NULL DEFAULT 'es' CHECK(output_language IN ('es','en','fr','de','it','pt')); PRAGMA user_version = 4;";
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
         transaction.Commit();
@@ -176,6 +181,25 @@ public sealed class SqliteSettingsStore(string databasePath) : ISettingsStore, I
         if (await command.ExecuteNonQueryAsync(token) != 1) throw new InvalidOperationException("Falta la configuración automática.");
     }
 
+    public async Task<string> ReadOutputLanguageAsync(CancellationToken token = default)
+    {
+        await using var connection = CreateConnection(); await connection.OpenAsync(token);
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT output_language FROM app_settings WHERE id=1;";
+        var language = await command.ExecuteScalarAsync(token) as string;
+        if (!OutputLanguages.IsSupported(language)) throw new AiException(AiFailure.InvalidSettings);
+        return language!;
+    }
+    public async Task SaveOutputLanguageAsync(string language, CancellationToken token = default)
+    {
+        _ = OutputLanguages.Get(language);
+        await using var connection = CreateConnection(); await connection.OpenAsync(token);
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE app_settings SET output_language=$language WHERE id=1;";
+        command.Parameters.AddWithValue("$language", language);
+        if (await command.ExecuteNonQueryAsync(token) != 1) throw new InvalidOperationException("Falta la configuración de idioma.");
+    }
+
     public async Task SaveSettingsAsync(AppSettings settings, CancellationToken cancellationToken = default)
     {
         if (settings.DailyRequestLimit is < 1 or > 100)
@@ -203,6 +227,12 @@ public sealed class SqliteSettingsStore(string databasePath) : ISettingsStore, I
     }
 
     public async Task<bool> TryReserveRequestAsync(DateOnly localDate, CancellationToken cancellationToken = default)
+        => await ReserveRequestAsync(localDate, true, cancellationToken);
+
+    public async Task<bool> TryReservePlanRequestAsync(DateOnly localDate, CancellationToken cancellationToken = default)
+        => await ReserveRequestAsync(localDate, false, cancellationToken);
+
+    private async Task<bool> ReserveRequestAsync(DateOnly localDate, bool requireApiEnabled, CancellationToken cancellationToken)
     {
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken);
@@ -213,12 +243,13 @@ public sealed class SqliteSettingsStore(string databasePath) : ISettingsStore, I
         // limit and enabled flag are checked at reservation time, never from a stale UI.
         command.CommandText = """
             INSERT INTO daily_request_counts (local_date, request_count)
-            SELECT $date, 1 FROM app_settings WHERE id = 1 AND ai_enabled = 1
+            SELECT $date, 1 FROM app_settings WHERE id = 1 AND ($require_api = 0 OR ai_enabled = 1)
             ON CONFLICT(local_date) DO UPDATE SET request_count = request_count + 1
-            WHERE request_count < (SELECT daily_request_limit FROM app_settings WHERE id = 1 AND ai_enabled = 1)
+            WHERE request_count < (SELECT daily_request_limit FROM app_settings WHERE id = 1 AND ($require_api = 0 OR ai_enabled = 1))
             RETURNING request_count;
             """;
         command.Parameters.AddWithValue("$date", localDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        command.Parameters.AddWithValue("$require_api", requireApiEnabled ? 1 : 0);
         var reserved = await command.ExecuteScalarAsync(cancellationToken) is not null;
         cancellationToken.ThrowIfCancellationRequested();
         transaction.Commit();

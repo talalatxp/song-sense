@@ -1,6 +1,6 @@
 # SongSense
 
-Aplicación personal para Windows para entender canciones. **F01–F04 y F07 cerradas; F05 y F06 implementadas, pendientes de prueba real de OpenAI:** detecta Spotify, consulta y corrige letras, traduce y explica con IA y conserva contenido en una caché local privada.
+Aplicación personal para Windows para entender canciones: detecta Spotify, consulta y corrige letras, traduce y explica con IA en seis idiomas y conserva contenido en una caché local privada.
 
 ## Requisitos de desarrollo
 
@@ -38,9 +38,9 @@ Las dependencias directas tienen versiones explícitas y cada proyecto conserva 
 
 ## Configurar IA de forma local
 
-**F08 parcialmente implementada (7 de octubre de 2026):** abre **Cuenta y consumo → Continuar con ChatGPT**. Completa el acceso oficial en tu navegador eligiendo la misma cuenta que utilizas en Codex y comprueba el correo mostrado. Song Sense no puede identificar automáticamente la cuenta de Codex ni importa sus credenciales. Puedes conectar/desconectar, cambiar entre registros y consultar los modelos autorizados. El primer inicio utiliza **ChatGPT · solo uso incluido**, incluso si había una API key guardada.
+**Integración ChatGPT (9 de octubre de 2026):** abre **Cuenta y consumo → Continuar con ChatGPT**, comprueba la cuenta, pulsa **Consultar modelos**, elige uno y guarda. Si el registro pendiente pertenece a otra cuenta, usa **Conectar una cuenta distinta**. Song Sense no importa las credenciales de Codex. El inicio usa el modo ChatGPT incluso si hay una API key guardada.
 
-**Las consultas con el plan ChatGPT están bloqueadas.** La documentación oficial explica el permiso de créditos adicionales en Ajustes → Uso, pero no hemos encontrado una interfaz pública documentada para verificar que está desactivado o imponer solo uso incluido por petición. Una casilla local, un login correcto o un listado de modelos no acreditan esa restricción. No se envían generaciones con el plan ni se pasa a pago automáticamente. F08 no se considera cerrada; falta verificar la política y ejecutar login/logout y análisis reales. [Contrato y pendientes](docs/RUTA_PROYECTO.md#f08--cuenta-chatgpt-plus-y-uso-incluido-sin-cargos-extra).
+Para habilitar generación, abre **Gestionar uso en ChatGPT**, desactiva el uso de créditos para Song Sense en la cuenta conectada, confirma ese ajuste en la app y pulsa **Habilitar consultas con mi plan**. La confirmación solo dura esta sesión: reiniciar, cambiar de cuenta, reconectar o recibir un rechazo de cuota/autenticación vuelve a pausar las consultas. El ajuste externo no puede verificarse desde la app y la confirmación no es una garantía de cargos cero. Si cambias el ajuste externo, pausa las consultas en Song Sense. No hay compra de créditos ni cambio automático a API key. La aceptación real y la verificación estricta de uso exclusivamente incluido siguen pendientes. [Contrato y pendientes](docs/RUTA_PROYECTO.md#f08--cuenta-chatgpt-plus-y-uso-incluido-sin-cargos-extra).
 
 Las credenciales OAuth y los registros de cuenta se guardan con DPAPI `CurrentUser`, reemplazo atómico y permisos exclusivos del usuario en `%LOCALAPPDATA%\SongSense\ChatGptAuth\session.dpapi`, fuera de SQLite y Git. No se solicitan contraseñas en la app. Las renovaciones se serializan entre procesos; se guarda el refresh token rotado antes de utilizarlo. Desconectar intenta revocar la sesión en OpenAI y elimina los tokens locales; si la revocación remota falla, se indica que debes desconectar la app en ChatGPT. Se conserva la identidad del registro para reconectar. La protección local no impide el acceso de otros procesos que operen como tu mismo usuario de Windows; no hay una garantía de seguridad del 100 %.
 
@@ -58,9 +58,11 @@ Sin una clave y un modelo suministrados para este proyecto, F05 y F06 quedan pen
 
 ## Traducir y explicar
 
-Con la letra confirmada y la IA activada, pulsa **Traducir y explicar**. Una sola solicitud obtiene idioma, traducción y significado. Se envía únicamente la letra numerada, sin título, artista, álbum ni audio. Comparte el límite diario y el bloqueo de la prueba de conexión. Hay un máximo de 16.384 tokens de salida por análisis; el coste depende del modelo y de los tokens de entrada/salida. El contador de solicitudes no limita euros.
+Con la letra confirmada y las consultas habilitadas, pulsa **Traducir y explicar**. Una sola solicitud obtiene idioma, traducción y significado. Se envía únicamente la letra numerada, sin título, artista, álbum ni audio. Los modos comparten el contador y límite diario local. La API key admite un máximo de 16.384 tokens de salida; el flujo ChatGPT no admite ese parámetro. El contador de solicitudes no limita euros ni representa la cuota Plus.
 
-La pestaña Letra conserva estrofas, repeticiones y orden. Si es español, muestra **La letra ya está en español**; si es mixta, conserva literalmente las líneas identificadas como españolas y traduce las demás. Significado muestra resumen, temas, metáforas, alternativas y avisos con la etiqueta **Interpretación generada por IA**. El formato y los IDs se validan localmente; eso no garantiza la exactitud lingüística o de la interpretación.
+En **Ajustes → Idioma**, elige español, inglés, francés, alemán, italiano o portugués. Un único selector determina el idioma de la traducción y de todas las explicaciones; la interfaz continúa en español. La selección se guarda automáticamente y no envía consultas de IA. Pulsa **Traducir y explicar** para generar el resultado en el idioma elegido.
+
+La pestaña Letra conserva estrofas, repeticiones y orden. Si el original ya está en el idioma elegido, no se duplica; en letras mixtas conserva literalmente las líneas que ya coinciden con el destino y traduce las demás. Significado muestra resumen, temas, metáforas, alternativas y avisos en ese mismo idioma; las citas conservan el original. Cada idioma tiene su propia caché y los resultados anteriores en español se conservan. Cambiar el idioma cancela el análisis activo y descarta resultados tardíos del idioma anterior. El formato y los IDs se validan localmente; eso no garantiza la exactitud lingüística o de la interpretación.
 
 Una respuesta rechazada, incompleta, de idioma desconocido o inválida no muestra resultados parciales ni se reintenta automáticamente. Puedes reintentar explícitamente si queda cuota. Cancelar puede seguir contando y generar coste. Cambiar canción, letra o modelo descarta el resultado mostrado; pausar lo conserva. Desde F07 se guarda el contenido válido en una caché local. El flujo automático corresponde a F09.
 
@@ -96,33 +98,48 @@ Si la base está corrupta, la app muestra un diagnóstico y ofrece **Recuperar b
 
 ## Flujo automático (F09)
 
-**Actualizar automáticamente** está activado inicialmente y su preferencia se conserva al cerrar. Tras 1,5 segundos de estabilidad de la canción, recupera la caché, busca la letra y genera el análisis cuando la configuración, la conexión y el límite diario lo permiten. Una versión ambigua exige confirmación; una canción instrumental no consulta IA. La activación de IA es independiente de este interruptor.
+**Actualizar automáticamente** está activado inicialmente y su preferencia se conserva al cerrar. Tras 1,5 segundos de estabilidad de la canción, recupera la caché y busca la letra. Las consultas de IA solo se envían al pulsar **Traducir y explicar** o **Regenerar**, nunca al cambiar canción, habilitar la cuenta o pulsar **Reintentar flujo**. Una versión ambigua exige confirmación; una canción instrumental no consulta IA. Los resultados ya guardados pueden mostrarse sin consultas nuevas.
 
 Cambiar de canción cancela el contexto anterior y descarta sus resultados. Si una consulta ya enviada tarda en finalizar, el flujo espera y conserva únicamente la canción pendiente más reciente. Cancelar no garantiza evitar el consumo de una consulta ya enviada. Pausar y reanudar Spotify no repite el análisis.
 
-Desmarcar el interruptor congela el contenido con **Actualización pausada**; reactivarlo procesa la canción actual de Spotify. Un fallo requiere **Reintentar flujo**, un reintento manual o salir de esa canción y volver. No hay reintentos de IA automáticos. La caché muestra **0 tokens nuevos**; las consultas muestran el consumo comunicado por el proveedor o indican que no está disponible.
+Desmarcar el interruptor congela el contenido con **Actualización pausada**; reactivarlo prepara la canción actual de Spotify. **Reintentar flujo** vuelve a preparar la letra; para reintentar un análisis pulsa **Traducir y explicar**. No hay consultas ni reintentos de IA automáticos. La caché muestra **0 tokens nuevos**; las consultas muestran el consumo comunicado por el proveedor o indican que no está disponible.
 
-El modo ChatGPT conserva el bloqueo de F08 y nunca pasa automáticamente a la API de pago. Esta entrega no resuelve el permiso de tu cuenta ni permite generar con el plan mientras no pueda verificarse la política de uso incluido.
+El modo ChatGPT permite generar tras la confirmación manual de créditos desactivados durante esta sesión y nunca pasa automáticamente a la API de pago. El uso del plan y su cuota los controla OpenAI.
 
 ## Almacenamiento
 
-La primera apertura crea `%LOCALAPPDATA%\SongSense\songsense.db`. SQLite usa `PRAGMA user_version = 3`; las migraciones añaden las tablas de caché y la preferencia de actualización automática conservando ajustes y contadores. La IA comienza desactivada, sin modelo, con límite inicial de 20 solicitudes.
+La primera apertura crea `%LOCALAPPDATA%\SongSense\songsense.db`. SQLite usa `PRAGMA user_version = 4`; las migraciones conservan ajustes, caché y contadores y añaden el idioma de salida, inicialmente español. La IA comienza desactivada, sin modelo, con límite inicial de 20 solicitudes.
 
 La base almacena contenido desde F07, pero nunca claves. El contrato de configuración solo permite preferencias no secretas. Una base de una versión más reciente se rechaza sin modificarla. Si falla el acceso, la ventana muestra Error y permite reintentar; la recuperación de corrupción requiere una acción explícita y conserva una copia local del original.
 
-La inicialización se ejecuta fuera del hilo de interfaz. Cerrar la ventana termina la aplicación; la bandeja del sistema corresponde a F10.
+La inicialización se ejecuta fuera del hilo de interfaz. Desde F10, cerrar oculta la ventana en la bandeja; **Salir** termina la aplicación y libera sus conexiones.
 
+## Ventana de uso diario (F10)
+
+**Siempre encima** comienza desactivado. Puedes ajustar el texto de lectura de **12 a 24 puntos**, inicialmente 16. La posición, tamaño, pestaña, texto y Siempre encima se conservan en `%LOCALAPPDATA%\SongSense\window-preferences.json`, fuera del repositorio y de las credenciales. Un archivo inválido usa valores seguros; los errores de escritura se muestran en la ventana.
+
+La pestaña **Letra y traducción** reúne original y traducción por estrofas; si el original coincide con el idioma elegido, solo se muestra una vez. **Significado** conserva resumen, temas, metáforas, alternativas y avisos. Tab recorre los controles, las flechas cambian de pestaña o ajustan el tamaño y las teclas de desplazamiento permiten leer sin ratón.
+
+**Cerrar** (también Alt+F4) oculta la ventana en la bandeja y mantiene la detección y el flujo activo. El icono dorado ofrece **Abrir**, **Pausar/Reanudar actualización** y **Salir**; un doble clic abre la ventana. Si Windows esconde el icono, está bajo la flecha de iconos de la bandeja. **Salir** está también en la ventana y termina el proceso. Abrir otra vez el acceso del escritorio reactiva la primera instancia. La app no se configura para arrancar con Windows y no lanza notificaciones por cada canción.
+
+Al abrir, restaurar o detectar cambios de pantalla, se ajusta la ventana a un área de trabajo disponible. La validación real del 150 %, la desconexión de monitores y el menú de bandeja sigue pendiente; consulta la evidencia en ESTADO_FEATURES.md. F10 no resuelve la conexión bloqueada de F08.
 ## Identidad y acceso de escritorio
 
-Song Sense usa dos claves de sol para las S del nombre, dorado sobre carbón cálido y una interfaz centrada en la lectura. La decisión y los detalles están en [docs/DISENO.md](docs/DISENO.md). La ventana se adapta a anchuras inferiores a 700 DIP y alturas inferiores a 700 DIP; original y traducción se apilan en ventanas estrechas.
+Song Sense usa dos claves de sol para las S del nombre, dorado sobre carbón cálido y una interfaz centrada en la lectura. La decisión y los detalles están en [docs/DISENO.md](docs/DISENO.md). La ventana compacta y los ajustes desplegados permiten desplazamiento. Original y traducción se leen por estrofas; si el idioma original coincide con el destino no se duplica.
 
-El icono está en `src/SongSense.App/Assets`. Para actualizar la copia autocontenida del escritorio después de cambiar el código, cierra la app y ejecuta:
+El icono está en `src/SongSense.App/Assets`. Para actualizar la copia autocontenida del escritorio después de cambiar el código, usa **Salir** en la ventana o en la bandeja y ejecuta:
 
 ```powershell
 .\scripts\Update-Desktop.ps1
 ```
 
 El script compila la app, actualiza el acceso de escritorio y el icono del anclaje existente. Si aún no está anclada, usa el menú de Windows **Mostrar más opciones → Anclar a la barra de tareas** sobre el acceso. Esta copia es local; no es una publicación ni el cierre de F11.
+
+## Entrega portable (F11)
+
+Ejecuta `./scripts/Build-Portable.ps1` para crear una carpeta nueva y un ZIP autocontenido Windows x64 bajo `artifacts/releases`, con guía, matriz de validación, licencias, manifiesto y SHA256. Extrae toda la carpeta y abre `SongSense.exe`; no requiere instalar .NET. `Test-PortablePackage.ps1 -Path <carpeta-o-zip>` audita los archivos concretos y `Test-PortableAudit.ps1` comprueba el rechazo de fixtures inseguros.
+
+La [guía de entrega](docs/ENTREGA_PORTABLE.md) explica costes, datos locales y errores. La [matriz de F11](docs/VALIDACION_F11.md) distingue pruebas controladas de aceptación real. El ZIP F11 creado el 8 de octubre no incorpora las correcciones ni la generación ChatGPT del 9 de octubre; no se ha regenerado. La entrega no incluye claves, base personal ni letras de pruebas. F11 sigue pendiente de aceptación real completa.
 
 ## Ruta y evidencia del desarrollo
 

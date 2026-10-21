@@ -31,6 +31,7 @@ public sealed record SongInsight(long TrackRevision, string Language,
     public string? Model { get; init; }
     public string? PromptVersion { get; init; }
     public AiUsage? Usage { get; init; }
+    public string TargetLanguage { get; init; } = OutputLanguages.Default;
 }
 
 public sealed record AppSettings(bool AiEnabled = false, string? Model = null,
@@ -52,6 +53,9 @@ public interface ILyricsProvider
 public interface IInsightProvider
 {
     Task<SongInsight> GenerateAsync(CurrentTrack track, ResolvedLyrics lyrics, CancellationToken cancellationToken);
+    Task<SongInsight> GenerateAsync(CurrentTrack track, ResolvedLyrics lyrics, string targetLanguage, CancellationToken cancellationToken)
+        => targetLanguage == OutputLanguages.Default ? GenerateAsync(track, lyrics, cancellationToken)
+            : throw new AiException(AiFailure.InvalidSettings);
 }
 
 // Secrets have no place in this interface or its SQLite implementation.

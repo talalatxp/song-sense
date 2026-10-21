@@ -14,6 +14,7 @@ public sealed class ChatGptConnection(ChatGptCredentialStore store, ChatGptOAuth
     private readonly SemaphoreSlim gate = new(1, 1);
     private ChatGptCredentials credentials = new();
     private bool ready;
+    private string? confirmedPlanClientId;
     private CancellationTokenSource authorization = new();
     public CancellationToken AuthorizationCancellation => authorization.Token;
     public AiConnectionMode Mode => credentials.Mode;
@@ -31,25 +32,95 @@ public sealed class ChatGptConnection(ChatGptCredentialStore store, ChatGptOAuth
     public OAuthFailureCode LoginCode => credentials.LoginCode;
     public int? LoginHttpStatus => credentials.LoginHttpStatus;
     public bool HasPendingRegistration => credentials.PendingClientId is not null;
-    // No official provider assertion or included-only request flag is documented.
-    // Neither local consent nor a successful model listing can change this gate.
-    public bool CanGenerate => ready && Mode == AiConnectionMode.ApiKey;
+    public bool CanReplaceUnverifiedRegistration => ready && HasPendingRegistration && credentials.Registrations.Count == 0;
+    // OpenAI does not expose an included-only request flag. Enabling is an explicit
+    // per-session user confirmation of external credit settings, not provider verification.
+    public bool PlanUseEnabled => PlanGranted && confirmedPlanClientId == ActiveClientId;
+    public bool CanGenerate => ready && (Mode == AiConnectionMode.ApiKey || PlanUseEnabled && AiSettingsRules.IsValidModel(Model));
     public string Status => !ready ? "Conexión no disponible: revisa el almacenamiento local." : Mode == AiConnectionMode.ApiKey ? "API key · de pago" :
-        Connected ? PlanGranted ? "ChatGPT · solo uso incluido · Consultas bloqueadas: no se puede verificar que los créditos estén desactivados." :
+        Connected ? PlanGranted ? PlanUseEnabled ? $"ChatGPT · {Model} · Uso del plan habilitado; créditos desactivados según tu confirmación." : "ChatGPT · Cuenta conectada · Confirma en Cuenta y consumo que has desactivado el uso de créditos para habilitar consultas." :
             "ChatGPT · Cuenta conectada sin permiso de uso del plan · Consultas bloqueadas" : "ChatGPT · solo uso incluido · Sin sesión";
     public string CacheScope => Mode == AiConnectionMode.ApiKey ? "api-key" : "chatgpt:" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes((Active?.Subject ?? "none") + "\n" + (Active?.ClientId ?? "none"))));
     public event EventHandler? Changed;
     private static string Label(ChatGptRegistration account) => account.Email + " · " + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(account.ClientId)))[..8] + (account.HasSession ? " · Conectada" : " · Desconectada");
 
     public Task InitializeAsync(CancellationToken token) => RunAsync(_ => Task.CompletedTask, token);
+    public Task SetPlanUseAsync(bool enabled, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        if (!enabled)
+        {
+            confirmedPlanClientId = null;
+            authorization.Cancel(); authorization.Dispose(); authorization = new CancellationTokenSource();
+            Changed?.Invoke(this, EventArgs.Empty);
+            return Task.CompletedTask;
+        }
+        return RunAsync(_ =>
+        {
+            if (credentials.Mode != AiConnectionMode.ChatGptIncluded || Active is not { HasSession: true } account || !account.Scopes.Contains(ChatGptOAuthClient.PlanScope) || !AiSettingsRules.IsValidModel(account.Model))
+                throw new AiException(AiFailure.InvalidSettings);
+            confirmedPlanClientId = credentials.ActiveClientId;
+            return Task.CompletedTask;
+        }, token);
+    }
+
+    public async Task<SongInsight> RunIncludedRequestAsync(Func<string, string, CancellationToken, Task<SongInsight>> operation, CancellationToken token)
+    {
+        if (!await gate.WaitAsync(0, token)) throw new AiException(AiFailure.Busy);
+        try
+        {
+            store.EnsurePrivateDirectory();
+            await using var fileLock = await AcquireLockAsync(token);
+            var saved = await store.ReadAsync(token);
+            var account = saved.Registrations.FirstOrDefault(x => x.ClientId == saved.ActiveClientId);
+            if (!ready || saved.Mode != AiConnectionMode.ChatGptIncluded || account is not { HasSession: true } ||
+                account.ClientId != confirmedPlanClientId || !account.Scopes.Contains(ChatGptOAuthClient.PlanScope) || !AiSettingsRules.IsValidModel(account.Model))
+                throw new AiException(AiFailure.PlanSafetyUnverified);
+            // Re-read the protected record under the same cross-process lock as settings/API requests.
+            if (account.ExpiresAt <= DateTimeOffset.UtcNow.AddSeconds(30))
+            {
+                try
+                {
+                    var replacement = await oauth.RefreshAsync(account, token);
+                    saved.Registrations.Remove(account); saved.Registrations.Add(replacement); account = replacement;
+                    await store.SaveAsync(saved, token);
+                    credentials = saved;
+                }
+                catch (AiException error) when (error.Failure == AiFailure.SessionExpired)
+                {
+                    account.ClearTokens(); await store.SaveAsync(saved, CancellationToken.None);
+                    credentials = saved; confirmedPlanClientId = null; throw;
+                }
+            }
+            if (!account.Scopes.Contains(ChatGptOAuthClient.PlanScope)) throw new AiException(AiFailure.Authentication);
+            using var current = CancellationTokenSource.CreateLinkedTokenSource(token, authorization.Token);
+            return await operation(account.Model!, account.AccessToken!, current.Token);
+        }
+        catch (AiException error) when (error.Failure is AiFailure.RateLimited or AiFailure.Authentication or AiFailure.SessionExpired)
+        { confirmedPlanClientId = null; throw; }
+        finally { gate.Release(); }
+    }
+    public Task PrepareDifferentAccountAsync(CancellationToken token) => RunAsync(async current =>
+    {
+        if (credentials.PendingClientId is not { } pending || credentials.Registrations.Count != 0)
+            throw new AiException(AiFailure.InvalidSettings);
+        // Explicit recovery for a registration started with the wrong account/workspace.
+        // Archive first; if either write fails, the existing durable registration is retained.
+        await store.RetainPendingRegistrationAsync(credentials.HostId, pending, current);
+        var replacement = new ChatGptCredentials { HostId = credentials.HostId, Mode = credentials.Mode };
+        await store.SaveAsync(replacement, current);
+        credentials = replacement;
+    }, token);
     public Task SetModeAsync(AiConnectionMode mode, CancellationToken token) => RunAsync(async current =>
     {
         if (!Enum.IsDefined(mode)) throw new AiException(AiFailure.InvalidSettings);
+        if (credentials.Mode != mode) confirmedPlanClientId = null;
         credentials.Mode = mode; await store.SaveAsync(credentials, current);
     }, token);
     public Task SelectAccountAsync(string clientId, CancellationToken token) => RunAsync(async current =>
     {
         if (credentials.Registrations.All(x => x.ClientId != clientId)) throw new AiException(AiFailure.InvalidSettings);
+        if (credentials.ActiveClientId != clientId) confirmedPlanClientId = null;
         credentials.ActiveClientId = clientId; Models = []; await store.SaveAsync(credentials, current);
     }, token);
     public Task SetModelAsync(string model, CancellationToken token) => RunAsync(async current =>
@@ -59,6 +130,7 @@ public sealed class ChatGptConnection(ChatGptCredentialStore store, ChatGptOAuth
     }, token);
     public Task ConnectAsync(bool newAccount, Action<Uri> openBrowser, CancellationToken token) => RunAsync(async current =>
     {
+        confirmedPlanClientId = null;
         if (newAccount && credentials.Registrations.Count >= 20) throw new AiException(AiFailure.InvalidSettings);
         if (newAccount && HasPendingRegistration) throw new AiException(AiFailure.Busy);
         credentials.LoginOutcome = ChatGptLoginOutcome.Waiting;
@@ -118,6 +190,7 @@ public sealed class ChatGptConnection(ChatGptCredentialStore store, ChatGptOAuth
         bool revoked = false;
         await RunAsync(async current =>
         {
+            confirmedPlanClientId = null;
             if (Active is not { } account) { revoked = true; return; }
             try { revoked = await oauth.RevokeAsync(account, current); }
             catch (Exception) { revoked = false; }
@@ -171,13 +244,18 @@ public sealed class ChatGptConnection(ChatGptCredentialStore store, ChatGptOAuth
     }
 }
 
-public sealed class ConnectionInsightProvider(IAnalysisSession connection, IInsightProvider apiProvider) : IInsightProvider
+public sealed class ConnectionInsightProvider(IAnalysisSession connection, IInsightProvider apiProvider, IInsightProvider? chatGptProvider = null) : IInsightProvider
 {
     public Task<SongInsight> GenerateAsync(CurrentTrack track, ResolvedLyrics lyrics, CancellationToken cancellationToken)
+        => GenerateAsync(track, lyrics, OutputLanguages.Default, cancellationToken);
+    public Task<SongInsight> GenerateAsync(CurrentTrack track, ResolvedLyrics lyrics, string targetLanguage, CancellationToken cancellationToken)
     {
+        _ = OutputLanguages.Get(targetLanguage);
         cancellationToken.ThrowIfCancellationRequested();
-        if (!connection.CanGenerate || connection.Mode != AiConnectionMode.ApiKey)
+        if (!connection.CanGenerate)
             throw new AiException(AiFailure.PlanSafetyUnverified);
-        return apiProvider.GenerateAsync(track, lyrics, cancellationToken);
+        if (connection.Mode == AiConnectionMode.ChatGptIncluded)
+            return chatGptProvider?.GenerateAsync(track, lyrics, targetLanguage, cancellationToken) ?? throw new AiException(AiFailure.PlanSafetyUnverified);
+        return apiProvider.GenerateAsync(track, lyrics, targetLanguage, cancellationToken);
     }
 }

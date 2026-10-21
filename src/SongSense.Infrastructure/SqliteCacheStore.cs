@@ -61,34 +61,35 @@ public sealed class SqliteCacheStore(string databasePath, TimeProvider? timeProv
         if (result is not null) touch.ExecuteNonQuery();
         token.ThrowIfCancellationRequested(); transaction.Commit(); return result;
     }
-    public async Task<SongInsight?> ReadInsightAsync(ResolvedLyrics lyrics, string model, string version, CancellationToken token = default, CurrentTrack? track = null, string scope = "api-key")
+    public async Task<SongInsight?> ReadInsightAsync(ResolvedLyrics lyrics, string model, string version, CancellationToken token = default, CurrentTrack? track = null, string scope = "api-key", string targetLanguage = OutputLanguages.Default)
     {
         await using var connection = Connection(); await connection.OpenAsync(token);
         using var transaction = connection.BeginTransaction(deferred: false);
         using var command = connection.CreateCommand(); command.Transaction = transaction; command.CommandText = "SELECT json FROM insight_cache WHERE cache_key=$key;";
-        command.Parameters.AddWithValue("$key", CacheIdentity.Analysis(lyrics, model, version, scope));
+        command.Parameters.AddWithValue("$key", CacheIdentity.Analysis(lyrics, model, version, scope, targetLanguage));
         var json = await command.ExecuteScalarAsync(token) as string;
-        var insight = json is null ? null : InsightValidation.Parse(lyrics.TrackRevision, lyrics.Text, json) with { Model = model, PromptVersion = version };
+        var insight = json is null ? null : InsightValidation.Parse(lyrics.TrackRevision, lyrics.Text, json, targetLanguage) with { Model = model, PromptVersion = version };
         if (insight is not null && track is not null)
         {
             Validate(track, lyrics);
-            using var link = Command(connection, transaction, "INSERT OR IGNORE INTO song_insights SELECT signature,$key FROM song_cache WHERE signature=$signature;", ("$key", CacheIdentity.Analysis(lyrics, model, version, scope)), ("$signature", CacheIdentity.Song(track)));
+            using var link = Command(connection, transaction, "INSERT OR IGNORE INTO song_insights SELECT signature,$key FROM song_cache WHERE signature=$signature;", ("$key", CacheIdentity.Analysis(lyrics, model, version, scope, targetLanguage)), ("$signature", CacheIdentity.Song(track)));
             link.ExecuteNonQuery();
         }
         token.ThrowIfCancellationRequested(); transaction.Commit(); return insight;
     }
-    public async Task SaveInsightAsync(CurrentTrack track, ResolvedLyrics lyrics, string model, string version, SongInsight insight, CancellationToken token = default, string scope = "api-key")
+    public async Task SaveInsightAsync(CurrentTrack track, ResolvedLyrics lyrics, string model, string version, SongInsight insight, CancellationToken token = default, string scope = "api-key", string targetLanguage = OutputLanguages.Default)
     {
         Validate(track, lyrics);
         if (lyrics.IsInstrumental || insight.TrackRevision != track.Revision || !AiSettingsRules.IsValidModel(model) || string.IsNullOrWhiteSpace(version)) throw new InvalidOperationException("Resultado incompatible.");
         if (insight.Model is not null && insight.Model != model || insight.PromptVersion is not null && insight.PromptVersion != version)
             throw new InvalidOperationException("El resultado pertenece a otro modelo o versión.");
+        if (insight.TargetLanguage != targetLanguage) throw new InvalidOperationException("El resultado pertenece a otro idioma.");
         var json = CacheIdentity.Serialize(insight);
-        _ = InsightValidation.Parse(track.Revision, lyrics.Text, json);
+        _ = InsightValidation.Parse(track.Revision, lyrics.Text, json, targetLanguage);
         await using var connection = Connection(); await connection.OpenAsync(token);
         using var transaction = connection.BeginTransaction(deferred: false);
         Upsert(connection, transaction, track, lyrics);
-        var key = CacheIdentity.Analysis(lyrics, model, version, scope);
+        var key = CacheIdentity.Analysis(lyrics, model, version, scope, targetLanguage);
         using var write = Command(connection, transaction, """
             INSERT INTO insight_cache VALUES ($key,$json,$created) ON CONFLICT(cache_key) DO UPDATE SET json=$json,created_at=$created;
             INSERT OR IGNORE INTO song_insights VALUES ($signature,$key);

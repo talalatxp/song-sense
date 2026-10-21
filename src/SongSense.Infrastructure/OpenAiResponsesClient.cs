@@ -12,6 +12,40 @@ public sealed class OpenAiResponsesClient(HttpClient http)
         => (await SendWithUsageAsync(key, payload, token, maximumBytes)).Text;
 
     public sealed record Result(string Text, AiUsage? Usage);
+    public static Result ReadCompletedResponse(JsonElement root)
+    {
+        var usage = ReadUsage(root);
+        try
+        {
+            if (!root.TryGetProperty("status", out var status)) throw Invalid(ResponseShape.MissingStatus);
+            if (status.GetString() == "incomplete") throw new AiException(AiFailure.Incomplete);
+            if (status.GetString() != "completed") throw Invalid(ResponseShape.InvalidStatus);
+            var texts = new List<string>();
+            if (!root.TryGetProperty("output", out var output)) throw Invalid(ResponseShape.MissingOutput);
+            foreach (var item in output.EnumerateArray())
+            {
+                var type = item.GetProperty("type").GetString();
+                if (type == "reasoning") continue;
+                if (type != "message") throw Invalid(ResponseShape.UnexpectedItem);
+                if (item.TryGetProperty("status", out var messageStatus) && messageStatus.GetString() != "completed") throw new AiException(AiFailure.Incomplete);
+                if (!item.TryGetProperty("content", out var content)) throw Invalid(ResponseShape.MissingContent);
+                foreach (var part in content.EnumerateArray())
+                {
+                    var partType = part.GetProperty("type").GetString();
+                    if (partType == "refusal") throw new AiException(AiFailure.Refused);
+                    if (partType != "output_text") throw Invalid(ResponseShape.UnexpectedContent);
+                    if (!part.TryGetProperty("text", out var text)) throw Invalid(ResponseShape.MissingText);
+                    texts.Add(text.GetString() ?? "");
+                }
+            }
+            if (texts.Count == 0) throw Invalid(ResponseShape.EmptyOutput);
+            return new Result(string.Concat(texts), usage);
+        }
+        catch (AiException error) { throw new AiException(error.Failure) { Usage = usage, ResponseShape = error.ResponseShape }; }
+        catch (Exception error) when (error is JsonException or InvalidOperationException or KeyNotFoundException)
+        { throw new AiException(AiFailure.InvalidResponse) { Usage = usage, ResponseShape = ResponseShape.MalformedResponse }; }
+        static AiException Invalid(ResponseShape shape) => new(AiFailure.InvalidResponse) { ResponseShape = shape };
+    }
     public static AiUsage? ReadUsage(JsonElement root)
     {
         if (!root.TryGetProperty("usage", out var usage) || usage.ValueKind != JsonValueKind.Object ||

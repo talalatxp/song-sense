@@ -3,6 +3,10 @@
 Fecha: 7 de octubre de 2026. Estado: F01–F04 y F07 cerradas; F05 y F06 implementadas, pendientes de validación real de OpenAI; F08–F11 pendientes. F08 incorpora la conexión con ChatGPT Plus solicitada el 7 de octubre. Evidencia en [ESTADO_FEATURES.md](ESTADO_FEATURES.md).
 Nombre del proyecto: **SongSense**. Repositorio: `song-sense`.
 
+## Iteración de UI/UX — 21 de octubre de 2026
+
+La auditoría y las mejoras posteriores se organizan en [PLAN_MEJORAS_UI_UX.md](PLAN_MEJORAS_UI_UX.md): 14 bloques UX01–UX14 con trazabilidad completa de H01–H50. Esta iteración conserva la numeración F01–F11 y sus aceptaciones pendientes; no declara implementadas las mejoras ni actualiza la copia del escritorio. Para el estado efectivo de cada feature, consultar [ESTADO_FEATURES.md](ESTADO_FEATURES.md), no deducirlo de la fecha histórica de esta ruta.
+
 ## Objetivo y alcance de la primera versión
 
 Aplicación personal para Windows que detecta la canción reproducida en Spotify, obtiene su letra de LRCLIB y muestra una traducción al español cuando corresponde y una explicación de su significado. Actualiza el contenido al cambiar de canción y reutiliza resultados locales.

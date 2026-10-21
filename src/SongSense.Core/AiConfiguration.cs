@@ -21,6 +21,9 @@ public enum AiFailure { Disabled, MissingKey, InvalidSettings, DailyLimit, Busy,
 // Never attach response bodies, API keys, HTTP headers or original exceptions.
 public enum AuthenticationStep { None, Consent, Callback, TokenExchange, TokenShape, IdentitySignature, IdentityClaims, IdentityMetadata, SelectedAccount }
 public enum OAuthFailureCode { None, InvalidGrant, InvalidClient, InvalidRequest, InvalidScope, AccessDenied, UnsupportedGrantType, Other }
+public enum InferenceStage { None, Http, Stream, CompletedResponse, InsightValidation }
+public enum InferenceCode { None, UsageLimitExceeded, UserNotEligible, ScopeNotAuthorized, UnsupportedCapability, RouteNotSupported, UsageUnavailable, Other }
+public enum ResponseShape { None, MissingStatus, InvalidStatus, MissingOutput, UnexpectedItem, MissingMessageStatus, MissingContent, UnexpectedContent, MissingText, EmptyOutput, MalformedResponse }
 public sealed class AiException(AiFailure failure) : Exception("No se pudo completar la operación de IA.")
 {
     public AiFailure Failure { get; } = failure;
@@ -28,6 +31,9 @@ public sealed class AiException(AiFailure failure) : Exception("No se pudo compl
     public AuthenticationStep AuthenticationStep { get; init; }
     public OAuthFailureCode OAuthCode { get; init; }
     public int? HttpStatus { get; init; }
+    public InferenceStage InferenceStage { get; init; }
+    public InferenceCode InferenceCode { get; init; }
+    public ResponseShape ResponseShape { get; init; }
 }
 
 public static partial class AiSettingsRules
