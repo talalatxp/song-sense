@@ -31,13 +31,41 @@ public sealed partial class MainViewModel
                 ScheduleAutomatic(true);
             }
             NotifyAutomatic();
+            NotifyInsight();
             if (storageReady && store is IAutomaticUpdateSettings) TrackCacheTask(PersistAutomaticAsync(value));
         }
     }
     public AsyncCommand RetryAutomaticCommand { get; }
+    public ActionCommand ResumeTrackingCommand { get; }
+    public bool CanResumeTracking => !AutomaticUpdatesEnabled && !automaticStopped && !lifetime.IsCancellationRequested;
+    public string TrackContextLabel => AutomaticUpdatesEnabled && CurrentTrack is not null && latestObservation.State == ApplicationState.Playing
+        && latestObservation.Track?.Playback == PlaybackState.Playing ? "AHORA SUENA" : "CANCIÓN MOSTRADA";
+    // Playback describes the latest observation, even when the displayed content is frozen.
+    public string PlaybackStatus => (latestObservation.State switch
+    {
+        ApplicationState.NoSpotify => "Spotify no disponible",
+        ApplicationState.NoTrack => "Spotify sin canción identificable",
+        ApplicationState.Error => "Reproducción no disponible",
+        _ => latestObservation.Track?.Playback switch
+        {
+            PlaybackState.Playing => "Spotify reproduciendo",
+            PlaybackState.Paused => "Spotify en pausa",
+            PlaybackState.Stopped => "Spotify detenido",
+            _ => "Estado de reproducción no disponible"
+        }
+    }) + (!AutomaticUpdatesEnabled && CurrentTrack is not null && latestObservation.Track is { } observed && observed.Revision != CurrentTrack.Revision
+        ? " · otra canción" : "");
+    public string TrackingStatus => AutomaticUpdatesEnabled ? "Seguimiento activo" : CurrentTrack is null
+        ? "Seguimiento pausado · sin canción mostrada" : "Seguimiento pausado · mostrando esta canción";
+    private void NotifyPlaybackContext()
+    {
+        OnChanged(nameof(TrackContextLabel)); OnChanged(nameof(PlaybackStatus)); OnChanged(nameof(TrackingStatus));
+        OnChanged(nameof(CanResumeTracking)); ResumeTrackingCommand.Refresh();
+    }
     private void NotifyAutomatic()
     {
         OnChanged(nameof(AutomaticUpdatesEnabled)); OnChanged(nameof(AutomaticMessage)); RetryAutomaticCommand.Refresh();
+        NotifyPlaybackContext();
     }
     private async Task PersistAutomaticAsync(bool enabled)
     {

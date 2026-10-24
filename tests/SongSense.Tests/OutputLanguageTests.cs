@@ -156,6 +156,39 @@ public sealed class OutputLanguageTests : IDisposable
         Assert.Equal("it", vm.Insight!.TargetLanguage); Assert.Equal(1, provider.Calls); await vm.StopAsync();
     }
 
+    [Fact]
+    public async Task LanguageTransitionOnlyClaimsConfirmedStorageAndReturningRestoresWithoutInference()
+    {
+        var store = await Store(); var provider = new Provider(); var vm = new MainViewModel(store, provider, insightProvider: provider, cache: new SqliteCacheStore(Database));
+        await vm.InitializeAsync(); vm.ApplyDetection(new(ApplicationState.Playing, Track, null)); vm.SaveManual(vm.BeginLyricsEdit()!, Lyrics.Text); await vm.WaitForCacheAsync();
+        await vm.GenerateInsightAsync(); Assert.Equal(ContentSaveState.Saved, vm.InsightSaveState);
+        var blocks = vm.ReadingBlocks; await vm.RefreshPreparationTimeAsync(); Assert.Same(blocks, vm.ReadingBlocks);
+        vm.ApplyAiSettings(new(true, "test-model")); await vm.WaitForCacheAsync(); Assert.Same(blocks, vm.ReadingBlocks);
+        vm.TargetLanguage = "en"; await vm.WaitForCacheAsync(); Assert.Null(vm.Insight);
+        Assert.Contains("Idioma cambiado a Inglés. No se ha enviado una consulta.", vm.LanguageMessage); Assert.Contains("guardado confirmado", vm.LanguageMessage);
+        vm.TargetLanguage = "es"; await vm.WaitForCacheAsync(); Assert.Equal("es", vm.Insight!.TargetLanguage);
+        Assert.Equal(AiUsageState.RecuperadoDeCache, vm.Usage.State); Assert.Equal(1, provider.Calls); await vm.StopAsync();
+    }
+    [Fact]
+    public async Task DeletingCacheRemovesThePreviouslyConfirmedLanguageStorageNotice()
+    {
+        var store = await Store(); var provider = new Provider(); var vm = new MainViewModel(store, provider, insightProvider: provider, cache: new SqliteCacheStore(Database));
+        await vm.InitializeAsync(); vm.ApplyDetection(new(ApplicationState.Playing, Track, null)); vm.SaveManual(vm.BeginLyricsEdit()!, Lyrics.Text); await vm.WaitForCacheAsync(); await vm.GenerateInsightAsync();
+        vm.TargetLanguage = "en"; await vm.WaitForCacheAsync(); Assert.Contains("guardado confirmado", vm.LanguageMessage);
+        await vm.DeleteCacheAsync(true); Assert.DoesNotContain("guardado confirmado", vm.LanguageMessage); Assert.Equal(1, provider.Calls); await vm.StopAsync();
+    }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task SessionOnlyOrFailedWriteNeverClaimsPreviousAnalysisIsSaved(bool failWrite)
+    {
+        var store = await Store(); var provider = new Provider(); var vm = new MainViewModel(store, provider, insightProvider: provider, cache: failWrite ? new SqliteCacheStore(Database) : null);
+        await vm.InitializeAsync(); vm.ApplyDetection(new(ApplicationState.Playing, Track, null)); vm.SaveManual(vm.BeginLyricsEdit()!, Lyrics.Text); await vm.WaitForCacheAsync();
+        if (failWrite) using (var connection = new SqliteConnection($"Data Source={Database};Pooling=False"))
+        { await connection.OpenAsync(); using var command = connection.CreateCommand(); command.CommandText = "CREATE TRIGGER fail_insight BEFORE INSERT ON insight_cache BEGIN SELECT RAISE(ABORT,'synthetic'); END;"; command.ExecuteNonQuery(); }
+        await vm.GenerateInsightAsync(); Assert.Equal(failWrite ? ContentSaveState.Failed : ContentSaveState.SessionOnly, vm.InsightSaveState);
+        Assert.Contains("no registrados", vm.AnalysisDetails); vm.TargetLanguage = "en"; await vm.WaitForCacheAsync();
+        Assert.DoesNotContain("guardado confirmado", vm.LanguageMessage); Assert.Null(vm.Insight); Assert.Equal(1, provider.Calls); await vm.StopAsync();
+    }
     private sealed class FailingStore : ISettingsStore, IOutputLanguageSettings
     {
         public bool Fail = true;

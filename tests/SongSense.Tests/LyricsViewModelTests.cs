@@ -6,6 +6,15 @@ namespace SongSense.Tests;
 
 public sealed class LyricsViewModelTests
 {
+    [Fact]
+    public async Task ReadingSourceKeepsServiceIdentifiersInDiagnosticOnly()
+    {
+        var provider = new Provider((_, _) => Task.FromResult(new LyricsSearchResult(1, LyricsSearchKind.Matched, new(1, "Texto propio", LyricsOrigin.Lrclib, 123456, false), [])));
+        var vm = new MainViewModel(new Store(), provider); vm.ApplyDetection(Detection(Track())); await vm.SearchLyricsAsync();
+        Assert.Equal("Fuente: LRCLIB", vm.LyricsSource); Assert.Contains("Solo en esta sesión", vm.ReadingSource);
+        Assert.DoesNotContain("123456", vm.ReadingSource); Assert.DoesNotContain("123456", vm.SongDetails); Assert.Contains("123456", vm.DiagnosticDetails);
+        await vm.StopAsync();
+    }
     private static CurrentTrack Track(long revision = 1) => new(revision, $"Song {revision}", "Artist", "Album", TimeSpan.FromSeconds(180), PlaybackState.Playing);
     private static TrackDetection Detection(CurrentTrack? track) => new(track is null ? ApplicationState.NoSpotify : ApplicationState.Playing, track, "Spotify.exe");
     private static LyricsSearchResult Matched(long revision) => new(revision, LyricsSearchKind.Matched,

@@ -6,19 +6,28 @@ using SongSense.Infrastructure;
 
 namespace SongSense.App;
 
-public sealed class AiSettingsViewModel(AiConfigurationService service, CancellationToken lifetime) : INotifyPropertyChanged, IDisposable
+public sealed partial class AiSettingsViewModel(AiConfigurationService service, CancellationToken lifetime, AiActivityViewModel? activity = null, IAnalysisSession? analysisSession = null) : INotifyPropertyChanged, IDisposable
 {
+    public AiActivityViewModel Activity { get; } = activity ?? new();
     private readonly CancellationTokenSource session = CancellationTokenSource.CreateLinkedTokenSource(lifetime);
     private CancellationTokenSource? request;
     private Task active = Task.CompletedTask;
     private bool busy;
     private bool initialized;
     private bool hasKey;
+    private long keyRevision;
+    public bool HasKey => hasKey;
+    public long? BeginKeyDeletion() => CanManage && hasKey ? keyRevision : null;
+    public Task ConfirmKeyDeletionAsync(long revision) => revision == keyRevision && hasKey && CanManage ? DeleteKeyAsync() : Task.CompletedTask;
     private string message = "Cargando ajustes locales…";
-    public bool AiEnabled { get; set; }
-    public string Model { get; set; } = "";
-    public string Limit { get; set; } = "20";
-    public bool NoticeAccepted { get; set; }
+    private NoticeKind messageKind;
+    public NoticeKind MessageKind => busy ? NoticeKind.Progress : messageKind;
+    private bool enabled, accepted;
+    private string model = "", limitText = "20";
+    public bool AiEnabled { get => enabled; set { enabled = value; NotifyForm(); } }
+    public string Model { get => model; set { model = value; NotifyForm(); } }
+    public string Limit { get => limitText; set { limitText = value; NotifyForm(); } }
+    public bool NoticeAccepted { get => accepted; set { accepted = value; NotifyForm(); } }
     public bool CanManage => initialized && !busy && !session.IsCancellationRequested;
     public bool CanCancel => busy && request is not null;
     public string KeyStatus => hasKey ? "Hay una clave guardada y cifrada. Déjalo vacío para conservarla." : "No hay una clave guardada.";
@@ -26,10 +35,10 @@ public sealed class AiSettingsViewModel(AiConfigurationService service, Cancella
     public string Message => message;
     public event PropertyChangedEventHandler? PropertyChanged;
     public event EventHandler<AppSettings>? SettingsLoaded;
-    private void Notify() { foreach (var name in new[] { nameof(AiEnabled), nameof(Model), nameof(Limit), nameof(NoticeAccepted), nameof(CanManage), nameof(CanCancel), nameof(KeyStatus), nameof(CountLabel), nameof(Message) }) PropertyChanged?.Invoke(this, new(name)); }
+    private void Notify() { foreach (var name in new[] { nameof(HasKey), nameof(AiEnabled), nameof(Model), nameof(Limit), nameof(NoticeAccepted), nameof(CanManage), nameof(CanCancel), nameof(KeyStatus), nameof(CountLabel), nameof(Message), nameof(MessageKind) }) PropertyChanged?.Invoke(this, new(name)); NotifyForm(); }
 
-    public Task InitializeAsync() => RunAsync(async token => { await ReloadAsync(token); initialized = true; message = "Abrir y guardar ajustes no hace solicitudes de red."; });
-    public Task SaveAsync(SecureString key) => RunAsync(async token =>
+    public Task InitializeAsync() => RunAsync(async token => { if (!modeSubscribed && analysisSession is not null) { analysisSession.Changed += ModeChanged; modeSubscribed = true; } await ReloadAsync(token); initialized = true; message = "Abrir y guardar ajustes no hace solicitudes de red."; });
+    public Task SaveAsync(SecureString key) => !CanManage || !ValidateForm(key) ? Task.CompletedTask : RunAsync(async token =>
     {
         if (!int.TryParse(Limit, NumberStyles.None, CultureInfo.InvariantCulture, out var limit) || limit is < 1 or > 100)
             throw new AiException(AiFailure.InvalidSettings);
@@ -37,11 +46,36 @@ public sealed class AiSettingsViewModel(AiConfigurationService service, Cancella
         await ReloadAsync(token);
         message = "Ajustes guardados. No se ha enviado ninguna solicitud.";
     });
-    public Task DeleteKeyAsync() => RunAsync(async token => { await service.DeleteKeyAsync(token); await ReloadAsync(token); message = "Clave eliminada. IA desactivada; el contador se conserva."; });
-    public Task TestAsync() => RunAsync(async token =>
+    public Task DeleteKeyAsync() => RunAsync(async token =>
+    {
+        try { await service.DeleteKeyAsync(token); }
+        finally { await ReloadAsync(token); }
+        message = "Clave eliminada. IA desactivada; el contador se conserva.";
+    });
+    public Task TestAsync() => !CanTest ? BlockTest() : RunAsync(async token =>
     {
         message = "Probando conexión: solicitud de pago en curso…"; Notify();
-        var usage = await service.TestConnectionAsync(token);
+        // Use persisted configuration, never the potentially unsaved form fields.
+        var saved = await service.ReadAsync(token);
+        var current = new AiUsagePresentation(AiUsageState.EnCurso, Context:
+            new("Prueba de conexión", "Texto fijo de prueba", null, null, "—", AiConnectionMode.ApiKey, saved.Settings.Model, "api-key"), At: DateTimeOffset.Now);
+        Activity.Record(current);
+        AiUsage? usage;
+        try
+        {
+            usage = await service.TestConnectionAsync(token);
+            Activity.Record(current with { State = usage is null ? AiUsageState.NoComunicado : AiUsageState.Comunicado, Tokens = usage });
+        }
+        catch (AiException error)
+        {
+            Activity.Record(current with { State = error.Usage is null ? AiUsageState.NoComunicado : AiUsageState.Comunicado, Tokens = error.Usage });
+            throw;
+        }
+        catch
+        {
+            Activity.Record(current with { State = AiUsageState.NoComunicado });
+            throw;
+        }
         message = "Conexión válida: respuesta estructurada comprobada. La solicitud cuenta para el límite diario. " +
             (usage?.Describe() ?? "Consumo no comunicado por OpenAI; no equivale a 0 tokens.");
     });
@@ -50,11 +84,14 @@ public sealed class AiSettingsViewModel(AiConfigurationService service, Cancella
     private async Task ReloadAsync(CancellationToken token)
     {
         var data = await service.ReadAsync(token);
-        AiEnabled = data.Settings.AiEnabled; Model = data.Settings.Model ?? "";
-        Limit = data.Settings.DailyRequestLimit.ToString(CultureInfo.InvariantCulture);
+        saved = data.Settings; enabled = saved.AiEnabled; model = saved.Model ?? "";
+        limitText = saved.DailyRequestLimit.ToString(CultureInfo.InvariantCulture);
+        draftKeyLength = 0; savedAcceptance = accepted; ClearErrors();
         hasKey = data.HasKey;
+        keyRevision++;
         SettingsLoaded?.Invoke(this, data.Settings);
         CountLabel = $"Hoy ({service.LocalDate:dd/MM/yyyy}): {data.Count} / {data.Settings.DailyRequestLimit} solicitudes. Se usa la fecha local de Windows.";
+        Activity.UpdateCounter(service.LocalDate, data.Count, data.Settings.DailyRequestLimit);
     }
     private Task RunAsync(Func<CancellationToken, Task> action)
     {
@@ -66,10 +103,10 @@ public sealed class AiSettingsViewModel(AiConfigurationService service, Cancella
     }
     private async Task RunCoreAsync(Func<CancellationToken, Task> action, CancellationTokenSource current)
     {
-        try { await action(current.Token); }
-        catch (OperationCanceledException) { message = "Operación cancelada. Los intentos reservados no se devuelven al contador."; }
-        catch (AiException error) { message = Describe(error.Failure) + (error.Usage is { } usage ? " " + usage.Describe() : ""); }
-        catch (Exception) { message = Describe(AiFailure.LocalStorage); }
+        try { messageKind = NoticeKind.Success; await action(current.Token); }
+        catch (OperationCanceledException) { messageKind = NoticeKind.Warning; message = "Operación cancelada. Los intentos reservados no se devuelven al contador."; }
+        catch (AiException error) { messageKind = NoticeKind.Error; message = Describe(error.Failure) + (error.Usage is { } usage ? " " + usage.Describe() : ""); }
+        catch (Exception) { messageKind = NoticeKind.Error; message = Describe(AiFailure.LocalStorage); }
         finally
         {
             // Update usage after success, HTTP failure or cancellation without altering
@@ -81,8 +118,9 @@ public sealed class AiSettingsViewModel(AiConfigurationService service, Cancella
                     var data = await service.ReadAsync(session.Token);
                     hasKey = data.HasKey;
                     CountLabel = $"Hoy ({service.LocalDate:dd/MM/yyyy}): {data.Count} / {data.Settings.DailyRequestLimit} solicitudes. Se usa la fecha local de Windows.";
+                    Activity.UpdateCounter(service.LocalDate, data.Count, data.Settings.DailyRequestLimit);
                 }
-                catch (Exception) { message = Describe(AiFailure.LocalStorage); }
+                catch (Exception) { messageKind = NoticeKind.Error; Activity.UpdateCounter(service.LocalDate, null, 0); CountLabel = "Contador local no disponible."; message = Describe(AiFailure.LocalStorage); }
             }
             current.Dispose(); request = null; busy = false; Notify();
         }
@@ -129,5 +167,5 @@ public sealed class AiSettingsViewModel(AiConfigurationService service, Cancella
         _ => "No se pudo acceder al almacenamiento local o descifrar la clave. Tus archivos se conservan; revisa el acceso o reemplaza la clave."
     };
     public async Task StopAsync() { session.Cancel(); await active; }
-    public void Dispose() => session.Dispose();
+    public void Dispose() { if (modeSubscribed && analysisSession is not null) analysisSession.Changed -= ModeChanged; session.Dispose(); }
 }

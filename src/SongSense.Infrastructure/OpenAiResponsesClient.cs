@@ -72,7 +72,7 @@ public sealed class OpenAiResponsesClient(HttpClient http)
                     HttpStatusCode.BadRequest or HttpStatusCode.NotFound or HttpStatusCode.UnprocessableEntity => AiFailure.IncompatibleModel,
                     HttpStatusCode.TooManyRequests => AiFailure.RateLimited,
                     _ => AiFailure.HttpError
-                });
+                }) { RetryAt = response.StatusCode == HttpStatusCode.TooManyRequests ? AiRetrySchedule.Read(response) : null };
             if (response.Content.Headers.ContentLength > maximumBytes) throw new AiException(AiFailure.InvalidResponse);
             await using var stream = await response.Content.ReadAsStreamAsync(token);
             using var buffer = new MemoryStream();
@@ -107,7 +107,7 @@ public sealed class OpenAiResponsesClient(HttpClient http)
             if (texts.Count != 1) throw new AiException(AiFailure.InvalidResponse);
             return new Result(texts[0], usage);
         }
-        catch (AiException error) { throw new AiException(error.Failure) { Usage = usage }; }
+        catch (AiException error) { throw new AiException(error.Failure) { Usage = usage, RetryAt = error.RetryAt }; }
         catch (HttpRequestException) { throw new AiException(AiFailure.Offline); }
         catch (IOException) { throw new AiException(AiFailure.Offline); }
         catch (JsonException) { throw new AiException(AiFailure.InvalidResponse) { Usage = usage }; }

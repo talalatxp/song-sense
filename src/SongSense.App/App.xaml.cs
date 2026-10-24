@@ -11,18 +11,18 @@ public partial class App : Application
     private ITrackDetector? detector;
     private MainViewModel? viewModel;
     private bool closing;
-    private bool canClose;
     private HttpClient? lyricsHttp;
     private LrclibLyricsProvider? lyricsProvider;
     private HttpClient? aiHttp;
     private ChatGptConnection? connection;
     private SingleInstance? instance;
     private DesktopTray? tray;
-    private bool exitRequested;
+    private IDisposable? themeSubscription;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        themeSubscription = ThemeResources.FollowSystem(this);
         instance = new SingleInstance();
         if (!instance.IsFirst) { _ = ActivateExistingAsync(); return; }
         lyricsHttp = new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false }) { Timeout = Timeout.InfiniteTimeSpan };
@@ -38,35 +38,23 @@ public partial class App : Application
         viewModel = new MainViewModel(settingsStore, lyricsProvider, lifetime.Token,
             new ConnectionInsightProvider(connection, new OpenAiInsightProvider(aiConfiguration, new OpenAiResponsesClient(aiHttp)), new ChatGptInsightProvider(connection, aiHttp, settingsStore, new ChatGptRequestBudget(settingsStore))),
             cache: new SqliteCacheStore(SqliteSettingsStore.DefaultDatabasePath), connection: connection);
-        connection.Changed += (_, _) =>
-        {
-            if (closing || Dispatcher.HasShutdownStarted) return;
-            if (Dispatcher.CheckAccess()) viewModel.ApplyConnectionChange();
-            else Dispatcher.BeginInvoke(viewModel.ApplyConnectionChange);
-        };
         detector = new SpotifyTrackDetector(new WindowsMediaSessionSource());
         detector.TrackChanged += TrackChanged;
         var mainWindow = new MainWindow { DataContext = viewModel,
-            CreateConnectionWindow = () => new ConnectionWindow(new ConnectionViewModel(connection, lifetime.Token))
+            CreateConnectionWindow = () => new ConnectionWindow(new ConnectionViewModel(connection, lifetime.Token, activity: viewModel.Activity))
             { OpenApiSettingsAction = () => { if (connection.Mode == AiConnectionMode.ApiKey && MainWindow is MainWindow window) window.ShowApiSettings(); } },
             CreateSettingsWindow = () =>
             {
-                var settingsVm = new AiSettingsViewModel(aiConfiguration, lifetime.Token);
+                var settingsVm = new AiSettingsViewModel(aiConfiguration, lifetime.Token, viewModel.Activity, connection);
                 settingsVm.SettingsLoaded += async (_, settings) => { viewModel.ApplyAiSettings(settings); await viewModel.RefreshAiUsageAsync(); };
                 return new AiSettingsWindow(settingsVm);
             } };
         MainWindow = mainWindow;
         mainWindow.InitializePreferences(new WindowPreferenceStore(WindowPreferenceStore.DefaultPath));
-        mainWindow.ExitRequested += (_, _) => { exitRequested = true; mainWindow.Close(); };
-        tray = new DesktopTray(viewModel, mainWindow.OpenFromTray, () => { exitRequested = true; mainWindow.Close(); });
+        tray = new DesktopTray(viewModel, mainWindow.OpenFromTray, mainWindow.RequestExit);
         instance.Listen(() => Dispatcher.BeginInvoke(() => { if (!closing) mainWindow.OpenFromTray(); }));
-        MainWindow.Closing += async (_, args) =>
+        mainWindow.ConfigureCloseBehavior(async () =>
         {
-            if (canClose) return;
-            args.Cancel = true;
-            mainWindow.SavePreferences();
-            if (!exitRequested) { mainWindow.Hide(); return; }
-            if (closing) return;
             closing = true;
             detector.TrackChanged -= TrackChanged;
             lifetime.Cancel();
@@ -79,10 +67,8 @@ public partial class App : Application
             lyricsProvider.Dispose();
             lyricsHttp.Dispose();
             aiHttp.Dispose();
-            canClose = true;
-            await Dispatcher.InvokeAsync(MainWindow.Close);
-            Shutdown();
-        };
+        }, tray.ShowFirstHideHint);
+        mainWindow.Closed += (_, _) => Shutdown();
         MainWindow.Show();
         viewModel.StartAutomaticUpdates();
         _ = viewModel.InitializeAsync();
@@ -109,6 +95,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        themeSubscription?.Dispose();
         lifetime.Cancel();
         tray?.Dispose(); instance?.Dispose();
         lifetime.Dispose();

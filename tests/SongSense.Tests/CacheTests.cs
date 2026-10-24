@@ -21,9 +21,59 @@ public sealed class CacheTests : IDisposable
         var settings = new SqliteSettingsStore(Database); await settings.InitializeAsync();
         return (settings, new SqliteCacheStore(Database, clock));
     }
+    [Fact]
+    public async Task CachedProvenanceDoesNotReplaceTheCurrentAiDecision()
+    {
+        var (settings, cache) = await Setup(); var track = Track(); var provider = new PendingProvider();
+        await settings.SaveSettingsAsync(new(false, "chosen-model", 3));
+        await cache.SaveLyricsAsync(track, Lyrics(track));
+        var source = new AnalysisProvenance(AiConnectionMode.ApiKey, "chosen-model", clock.GetUtcNow());
+        await cache.SaveInsightAsync(track, Lyrics(track), "chosen-model", CacheIdentity.Version, Insight(track) with { Provenance = source });
+        var vm = new MainViewModel(settings, provider, insightProvider: provider, cache: cache);
+        await vm.InitializeAsync(); vm.ApplyDetection(new(ApplicationState.Playing, track, null)); await vm.WaitForCacheAsync();
+        Assert.Equal(AiUsageState.RecuperadoDeCache, vm.Usage.State);
+        Assert.Equal("API de pago · chosen-model", vm.AiDecisionLabel);
+        Assert.Contains("Fecha del análisis:", vm.AnalysisDetails);
+        Assert.DoesNotContain("Fecha", vm.AiDecisionLabel);
+        Assert.False(vm.RegenerateCommand.CanExecute(null)); Assert.False(provider.Started.Task.IsCompleted);
+        await vm.StopAsync();
+    }
+    [Fact]
+    public async Task AnalysisProvenanceRoundTripsAndIsRemovedWithItsOrphanedAnalysis()
+    {
+        var (_, cache) = await Setup(); var track = Track();
+        var source = new AnalysisProvenance(AiConnectionMode.ApiKey, "chosen-model", DateTimeOffset.Parse("2026-10-21T12:00:00Z"));
+        await cache.SaveInsightAsync(track, Lyrics(track), "chosen-model", CacheIdentity.Version, Insight(track) with { Provenance = source });
+        Assert.Equal(source, (await cache.ReadInsightAsync(Lyrics(track), "chosen-model", CacheIdentity.Version))!.Provenance);
+        await cache.DeleteSongAsync(track); Assert.Equal(0, Scalar("SELECT count(*) FROM insight_provenance;"));
+    }
+    [Fact]
+    public async Task VersionFourMigrationDoesNotInventProvenanceForOldResults()
+    {
+        var (store, cache) = await Setup(); var track = Track(); await store.SaveSettingsAsync(new(true, "chosen-model", 40));
+        await cache.SaveInsightAsync(track, Lyrics(track), "chosen-model", CacheIdentity.Version, Insight(track));
+        using (var connection = Open()) using (var command = connection.CreateCommand())
+        { command.CommandText = "DROP TABLE insight_provenance; PRAGMA user_version=4;"; command.ExecuteNonQuery(); }
+        await store.InitializeAsync(); await store.InitializeAsync();
+        var result = await cache.ReadInsightAsync(Lyrics(track), "chosen-model", CacheIdentity.Version);
+        Assert.NotNull(result); Assert.Null(result.Provenance); Assert.Equal(5, Scalar("PRAGMA user_version;"));
+        Assert.Equal(new AppSettings(true, "chosen-model", 40), await store.ReadSettingsAsync());
+    }
     private SqliteConnection Open()
     {
         var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = Database, Pooling = false }.ToString()); connection.Open(); return connection;
+    }
+    [Fact]
+    public async Task EditorConfirmsDurableWriteAndReopenRestoresTheOriginalText()
+    {
+        var (store, cache) = await Setup(); var provider = new PendingProvider(); var track = Track();
+        var vm = new MainViewModel(store, provider, cache: cache); await vm.InitializeAsync(); vm.ApplyDetection(new(ApplicationState.Playing, track, null)); await vm.WaitForCacheAsync();
+        using (var editor = new LyricsEditorViewModel(vm, vm.BeginLyricsEdit()!))
+        { editor.ManualText = "Primera estrofa propia\nSegunda línea"; await editor.SaveAsync(); Assert.Contains("este dispositivo", editor.SaveMessage); }
+        await vm.StopAsync();
+        var reopened = new MainViewModel(new SqliteSettingsStore(Database), provider, cache: new SqliteCacheStore(Database, clock));
+        await reopened.InitializeAsync(); reopened.ApplyDetection(new(ApplicationState.Playing, track, null)); await reopened.WaitForCacheAsync();
+        Assert.Equal("Primera estrofa propia\nSegunda línea", reopened.OriginalLyrics); await reopened.StopAsync();
     }
     private long Scalar(string sql)
     {
@@ -60,7 +110,7 @@ public sealed class CacheTests : IDisposable
         var (store, _) = await Setup(); await store.InitializeAsync();
         Assert.Equal(new AppSettings(false, "chosen-model", 42), await store.ReadSettingsAsync());
         Assert.Equal(17, await store.ReadRequestCountAsync(new(2026, 10, 7)));
-        Assert.Equal(4, Scalar("PRAGMA user_version;"));
+        Assert.Equal(5, Scalar("PRAGMA user_version;"));
         Assert.True(await store.ReadAutomaticUpdatesAsync());
     }
 
@@ -77,6 +127,9 @@ public sealed class CacheTests : IDisposable
         await vm.InitializeAsync(); await vm.WaitForCacheAsync();
         Assert.Equal(Lyrics(track).Text, vm.OriginalLyrics);
         Assert.True(vm.HasInsight);
+        Assert.Equal(AiUsageState.RecuperadoDeCache, vm.Usage.State);
+        Assert.Null(vm.Usage.Tokens);
+        Assert.Equal("Guardado en este dispositivo · 0 tokens nuevos", vm.CompactUsage);
         Assert.Equal(99, vm.Insight!.TrackRevision);
         Assert.Equal(vm.LyricsRevision, vm.Insight.LyricsRevision);
         Assert.Equal(0, provider.Calls);

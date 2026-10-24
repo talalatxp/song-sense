@@ -1,7 +1,8 @@
 namespace SongSense.Core;
 
 public sealed record WindowPreferences(int Version = 1, double? Left = null, double? Top = null,
-    double Width = 860, double Height = 780, int Tab = 0, double TextSize = 16, bool AlwaysOnTop = false);
+    double Width = 860, double Height = 780, int Tab = 0, double TextSize = 16, bool AlwaysOnTop = false,
+    bool KeepInTray = true, bool TrayHintShown = false);
 public sealed record WorkArea(double Left, double Top, double Width, double Height);
 public static class WindowPlacement
 {

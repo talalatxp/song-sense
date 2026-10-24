@@ -249,6 +249,99 @@ public sealed class InsightTests
         Assert.Equal(0, provider.Calls);
     }
 
+    [Fact]
+    public async Task UsageStartsUnrequestedAndPendingIsNotCache()
+    {
+        var pending = new TaskCompletionSource<SongInsight>();
+        var vm = ReadyVm(new InsightProvider((_, _, _) => pending.Task));
+        Assert.Equal(AiUsageState.NoSolicitado, vm.Usage.State);
+        Assert.Equal("", vm.CompactUsage);
+        Assert.Null(vm.Activity.Last);
+        var task = vm.GenerateInsightAsync();
+        Assert.Equal(AiUsageState.EnCurso, vm.Usage.State);
+        Assert.Equal("Consumo pendiente", vm.CompactUsage);
+        pending.SetResult(InsightValidation.Parse(1, Lyrics, Json()) with { Usage = new(100, 50, 150) });
+        await task;
+        Assert.Equal(AiUsageState.Comunicado, vm.Usage.State);
+        Assert.Equal(new AiUsage(100, 50, 150), vm.Usage.Tokens);
+        Assert.Equal(1, vm.Usage.Context!.TrackRevision);
+        Assert.Equal("chosen-model", vm.Usage.Context.Model);
+        Assert.Equal("es", vm.Usage.Context.Language);
+        Assert.Contains("Entrada: 100", vm.UsageMessage);
+        Assert.Contains("Salida: 50", vm.UsageMessage);
+        Assert.Contains("OpenAI", vm.CompactUsage);
+    }
+
+    [Theory]
+    [InlineData(false, false)] [InlineData(false, true)]
+    [InlineData(true, false)] [InlineData(true, true)]
+    public async Task UnknownNeverLooksLikeCacheAndReportedZeroIsAProviderResponse(bool failure, bool reported)
+    {
+        AiUsage? usage = reported ? new(0, 0, 0) : null;
+        var vm = ReadyVm(new InsightProvider((_, _, _) => failure
+            ? Task.FromException<SongInsight>(new AiException(AiFailure.Offline) { Usage = usage })
+            : Task.FromResult(InsightValidation.Parse(1, Lyrics, Json()) with { Usage = usage })));
+        await vm.GenerateInsightAsync();
+        Assert.Equal(reported ? AiUsageState.Comunicado : AiUsageState.NoComunicado, vm.Usage.State);
+        Assert.DoesNotContain("Guardado", vm.CompactUsage);
+        if (reported) Assert.Equal("0 tokens · OpenAI", vm.CompactUsage);
+        else
+        {
+            Assert.Contains("no equivale a 0 tokens", vm.UsageMessage);
+            Assert.Equal("Consumo no disponible", vm.CompactUsage);
+        }
+    }
+
+    [Fact]
+    public async Task CancelKeepsUnknownUntilLateUsageArrivesOnlyInItsOwnActivity()
+    {
+        var pending = new TaskCompletionSource<SongInsight>();
+        var vm = ReadyVm(new InsightProvider((_, _, _) => pending.Task));
+        var task = vm.GenerateInsightAsync();
+        vm.CancelInsight();
+        Assert.Equal(AiUsageState.NoComunicado, vm.Usage.State);
+        Assert.Equal("Consumo no disponible", vm.CompactUsage);
+        vm.ApplyDetection(new(ApplicationState.Playing, Track(2), null));
+        pending.SetResult(InsightValidation.Parse(1, Lyrics, Json()) with { Usage = new(10, 4, 14) });
+        await task;
+        Assert.Null(vm.Insight);
+        Assert.Equal(AiUsageState.NoSolicitado, vm.Usage.State);
+        Assert.Equal(1, vm.Activity.Last!.Context!.TrackRevision);
+        Assert.Equal(new AiUsage(10, 4, 14), vm.Activity.Last.Tokens);
+    }
+
+    [Fact]
+    public async Task LateReportedUsageUpdatesCancelledContextWithoutApplyingItsResult()
+    {
+        var pending = new TaskCompletionSource<SongInsight>();
+        var vm = ReadyVm(new InsightProvider((_, _, _) => pending.Task));
+        var task = vm.GenerateInsightAsync();
+        vm.CancelInsight();
+        pending.SetResult(InsightValidation.Parse(1, Lyrics, Json()) with { Usage = new(10, 4, 14) });
+        await task;
+        Assert.Null(vm.Insight);
+        Assert.Equal(AiUsageState.Comunicado, vm.Usage.State);
+        Assert.Equal(new AiUsage(10, 4, 14), vm.Usage.Tokens);
+    }
+
+    [Fact]
+    public async Task OldCompletionCannotReplaceNewerSongActivity()
+    {
+        var old = new TaskCompletionSource<SongInsight>();
+        var vm = ReadyVm(new InsightProvider((track, _, _) => track.Revision == 1 ? old.Task :
+            Task.FromResult(InsightValidation.Parse(track.Revision, Lyrics, Json()) with { Usage = new(20, 5, 25) })));
+        var first = vm.GenerateInsightAsync();
+        vm.ApplyDetection(new(ApplicationState.Playing, Track(2), null));
+        vm.SaveManual(vm.BeginLyricsEdit()!, Lyrics);
+        await vm.GenerateInsightAsync();
+        old.SetResult(InsightValidation.Parse(1, Lyrics, Json()) with { Usage = new(100, 50, 150) });
+        await first;
+        Assert.Equal(2, vm.Insight!.TrackRevision);
+        Assert.Equal(2, vm.Usage.Context!.TrackRevision);
+        Assert.Equal(2, vm.Activity.Last!.Context!.TrackRevision);
+        Assert.Equal(new AiUsage(20, 5, 25), vm.Activity.Last.Tokens);
+    }
+
     private static MainViewModel ReadyVm(IInsightProvider provider)
     {
         var vm = new MainViewModel(new Store(), new LyricsProvider(), insightProvider: provider);

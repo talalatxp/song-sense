@@ -8,7 +8,7 @@ public sealed class SqliteSettingsStore(string databasePath) : ISettingsStore, I
 {
     public bool CanRecover { get; private set; }
     public string RecoveryMessage { get; private set; } = "";
-    public const int SchemaVersion = 4;
+    public const int SchemaVersion = 5;
     public static string DefaultDatabasePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SongSense", "songsense.db");
 
@@ -94,6 +94,17 @@ public sealed class SqliteSettingsStore(string databasePath) : ISettingsStore, I
         if (version < 4)
         {
             command.CommandText = "ALTER TABLE app_settings ADD COLUMN output_language TEXT NOT NULL DEFAULT 'es' CHECK(output_language IN ('es','en','fr','de','it','pt')); PRAGMA user_version = 4;";
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        if (version < 5)
+        {
+            command.CommandText = """
+                CREATE TABLE IF NOT EXISTS insight_provenance (
+                    cache_key TEXT PRIMARY KEY REFERENCES insight_cache(cache_key) ON DELETE CASCADE,
+                    mode INTEGER NOT NULL, model TEXT NOT NULL, created_at INTEGER NOT NULL
+                );
+                PRAGMA user_version = 5;
+                """;
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
         transaction.Commit();

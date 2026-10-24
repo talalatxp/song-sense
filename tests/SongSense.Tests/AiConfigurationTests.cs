@@ -362,10 +362,145 @@ public sealed class AiConfigurationTests : IDisposable
         Assert.Equal(3, await store.ReadRequestCountAsync(new(2026, 10, 6)));
     }
 
+    [Theory]
+    [InlineData(false, false)] [InlineData(false, true)]
+    [InlineData(true, false)] [InlineData(true, true)]
+    public async Task ConnectionProbeSharesTypedActivityWithSavedModelAndReportedOrUnknownTokens(bool failure, bool reported)
+    {
+        var body = ValidResponse.TrimEnd();
+        if (reported) body = body[..^1] + ",\"usage\":{\"input_tokens\":10,\"output_tokens\":4,\"total_tokens\":14}}";
+        if (failure) body = reported
+            ? "{\"status\":\"incomplete\",\"usage\":{\"input_tokens\":10,\"output_tokens\":4,\"total_tokens\":14},\"output\":[]}"
+            : "{\"status\":\"incomplete\",\"output\":[]}";
+        var (service, _, handler) = await SetupAsync((_, _) => Task.FromResult(Response(body: body)));
+        await EnableAsync(service);
+        var activity = new AiActivityViewModel();
+        using var vm = new AiSettingsViewModel(service, CancellationToken.None, activity);
+        await vm.InitializeAsync();
+        Assert.Null(activity.Last);
+        await vm.TestAsync();
+        Assert.Equal("chosen-model", vm.Model);
+        Assert.Equal("chosen-model", activity.Last!.Context!.Model);
+        Assert.Equal("Prueba de conexión", activity.Last.Context.Operation);
+        Assert.Equal(reported ? AiUsageState.Comunicado : AiUsageState.NoComunicado, activity.Last.State);
+        Assert.Equal(reported ? new AiUsage(10, 4, 14) : null, activity.Last.Tokens);
+        Assert.Contains("1 / 20", activity.Counter);
+        Assert.Equal(1, handler.Calls);
+    }
+
+    [Fact]
+    public async Task CancelledConnectionProbeLeavesUnknownUsageAndUpdatesReservedCounter()
+    {
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (service, _, handler) = await SetupAsync(async (_, token) =>
+        {
+            entered.SetResult(); await Task.Delay(Timeout.Infinite, token); return Response();
+        });
+        await EnableAsync(service);
+        var activity = new AiActivityViewModel();
+        using var vm = new AiSettingsViewModel(service, CancellationToken.None, activity);
+        await vm.InitializeAsync();
+        var work = vm.TestAsync();
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.Equal(AiUsageState.EnCurso, activity.Last!.State);
+        vm.Cancel(); await work;
+        Assert.Equal(AiUsageState.NoComunicado, activity.Last.State);
+        Assert.Contains("1 / 20", activity.Counter);
+        Assert.Equal(1, handler.Calls);
+    }
+
+    [Fact]
+    public async Task KeyDeletionSnapshotCanBeAbandonedOrInvalidatedAndNeverEnablesAnotherMode()
+    {
+        var (service, store, handler) = await SetupAsync();
+        using var vm = new AiSettingsViewModel(service, CancellationToken.None);
+        await vm.InitializeAsync(); Assert.False(vm.HasKey); Assert.Null(vm.BeginKeyDeletion());
+        await EnableAsync(service); await vm.InitializeAsync(); var old = vm.BeginKeyDeletion()!.Value;
+        Assert.True((await service.ReadAsync(CancellationToken.None)).HasKey);
+        await vm.InitializeAsync(); await vm.ConfirmKeyDeletionAsync(old); Assert.True(vm.HasKey);
+        await vm.ConfirmKeyDeletionAsync(vm.BeginKeyDeletion()!.Value);
+        Assert.False(vm.HasKey); Assert.False((await store.ReadSettingsAsync()).AiEnabled); Assert.Equal(0, handler.Calls);
+    }
+    [Fact]
+    public async Task DirtyFormBlocksProbeUntilSavedAndReopenUsesPersistedConfiguration()
+    {
+        var (service, _, handler) = await SetupAsync(); await EnableAsync(service);
+        using var vm = new AiSettingsViewModel(service, CancellationToken.None); await vm.InitializeAsync();
+        Assert.True(vm.CanTest); vm.Model = "new-model"; Assert.True(vm.HasChanges); Assert.False(vm.CanTest);
+        await vm.TestAsync(); Assert.Equal(0, handler.Calls); Assert.Null(vm.Activity.Last);
+        using var empty = new SecureString(); await vm.SaveAsync(empty);
+        Assert.False(vm.HasChanges); Assert.True(vm.CanTest); Assert.Contains("new-model", vm.EffectiveConfiguration); Assert.Equal(0, handler.Calls);
+        using var reopened = new AiSettingsViewModel(service, CancellationToken.None); await reopened.InitializeAsync();
+        Assert.Equal("new-model", reopened.Model); Assert.False(reopened.HasChanges);
+        reopened.KeyEdited(10); Assert.False(reopened.CanTest); await reopened.TestAsync(); Assert.Equal(0, handler.Calls);
+    }
+    [Fact]
+    public async Task FieldErrorsAreIndependentAndValidValuesRemainEditableWithoutSavingKey()
+    {
+        var (service, _, handler) = await SetupAsync(); using var vm = new AiSettingsViewModel(service, CancellationToken.None); await vm.InitializeAsync();
+        vm.AiEnabled = true; vm.Model = "has spaces"; vm.Limit = "101";
+        using var empty = new SecureString(); await vm.SaveAsync(empty);
+        Assert.Equal("Key", vm.FirstInvalidField); Assert.NotEmpty(vm.ModelError); Assert.NotEmpty(vm.LimitError); Assert.NotEmpty(vm.NoticeError); Assert.NotEmpty(vm.KeyError);
+        vm.Model = "valid-model"; vm.Limit = "30"; using var key = Secure(TestKey); await vm.SaveAsync(key);
+        Assert.Equal("Notice", vm.FirstInvalidField); Assert.Empty(vm.ModelError); Assert.Empty(vm.LimitError); Assert.Empty(vm.KeyError);
+        Assert.Equal("valid-model", vm.Model); Assert.Equal("30", vm.Limit); Assert.False(File.Exists(KeyPath)); Assert.Equal(0, handler.Calls);
+        vm.NoticeAccepted = true; await vm.SaveAsync(key); Assert.False(vm.HasChanges); Assert.True(vm.HasKey); Assert.Equal(0, handler.Calls);
+    }
+    [Theory]
+    [InlineData("")] [InlineData("0")] [InlineData("101")] [InlineData("1.5")] [InlineData("abc")] [InlineData(" ")] [InlineData(" 20 ")]
+    public async Task InvalidLimitHasSpecificErrorAndNeverConsumesRequest(string limit)
+    {
+        var (service, _, handler) = await SetupAsync(); using var vm = new AiSettingsViewModel(service, CancellationToken.None); await vm.InitializeAsync();
+        vm.Model = "valid-model"; vm.Limit = limit; using var key = Secure(TestKey); await vm.SaveAsync(key);
+        Assert.Equal("Limit", vm.FirstInvalidField); Assert.NotEmpty(vm.LimitError); Assert.Equal(limit, vm.Limit); Assert.Equal(0, handler.Calls); Assert.False(vm.HasKey);
+    }
+    [Fact]
+    public async Task ModeChangeWhileApiWindowIsOpenImmediatelyBlocksPaidProbe()
+    {
+        var (service, _, handler) = await SetupAsync(); await EnableAsync(service); var mode = new FormSession();
+        using var vm = new AiSettingsViewModel(service, CancellationToken.None, analysisSession: mode); await vm.InitializeAsync(); Assert.True(vm.CanTest);
+        mode.Change(AiConnectionMode.ChatGptIncluded); Assert.False(vm.CanTest); Assert.Contains("API bloqueada", vm.EffectiveConfiguration);
+        await vm.TestAsync(); Assert.Equal(0, handler.Calls); Assert.Null(vm.Activity.Last);
+        mode.Change(AiConnectionMode.ApiKey); Assert.True(vm.CanTest); Assert.Equal(0, handler.Calls);
+    }
+    [Fact]
+    public async Task CorrectingLimitClearsStaleFieldAndFooterErrorsWithoutSavingOrProbing()
+    {
+        var (service, _, handler) = await SetupAsync(); await EnableAsync(service);
+        using var vm = new AiSettingsViewModel(service, CancellationToken.None); await vm.InitializeAsync();
+        vm.Limit = "0"; using var empty = new SecureString(); await vm.SaveAsync(empty); Assert.NotEmpty(vm.LimitError);
+        vm.Limit = "20"; Assert.Empty(vm.LimitError); Assert.Null(vm.FirstInvalidField); Assert.False(vm.HasChanges);
+        Assert.Equal(NoticeKind.Information, vm.MessageKind); Assert.True(vm.CanTest); Assert.Equal(0, handler.Calls);
+    }
+    private sealed class FormSession : IAnalysisSession
+    {
+        public AiConnectionMode Mode { get; private set; } = AiConnectionMode.ApiKey;
+        public string? Model => null; public string CacheScope => "fixture"; public bool CanGenerate => true; public string Status => "fixture";
+        public event EventHandler? Changed;
+        public void Change(AiConnectionMode value) { Mode = value; Changed?.Invoke(this, EventArgs.Empty); }
+    }
     private sealed class Handler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send) : HttpMessageHandler
     {
         public int Calls { get; private set; }
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token) { Calls++; return send(request, token); }
+    }
+    [Fact]
+    public async Task FailedKeyRemovalStillRefreshesDisabledApiWithoutClaimingDeletion()
+    {
+        var (_, store, handler) = await SetupAsync(); await store.SaveSettingsAsync(new(true, "chosen-model"));
+        var http = new HttpClient(handler); clients.Add(http);
+        var service = new AiConfigurationService(store, new FailingDeleteSecret(), store, new OpenAiConnectionProbe(http));
+        using var vm = new AiSettingsViewModel(service, CancellationToken.None); await vm.InitializeAsync();
+        await vm.ConfirmKeyDeletionAsync(vm.BeginKeyDeletion()!.Value);
+        Assert.True(vm.HasKey); Assert.False(vm.AiEnabled); Assert.Equal(NoticeKind.Error, vm.MessageKind);
+        Assert.False((await store.ReadSettingsAsync()).AiEnabled); Assert.Equal(0, handler.Calls);
+    }
+    private sealed class FailingDeleteSecret : ISecretStore
+    {
+        public Task<bool> HasKeyAsync(CancellationToken t = default) => Task.FromResult(true);
+        public Task SaveKeyAsync(SecureString key, CancellationToken t = default) => Task.CompletedTask;
+        public Task<string?> ReadKeyAsync(CancellationToken t = default) => Task.FromResult<string?>(TestKey);
+        public Task DeleteKeyAsync(CancellationToken t = default) => Task.FromException(new IOException("synthetic"));
     }
     private sealed class TestClock : TimeProvider
     {

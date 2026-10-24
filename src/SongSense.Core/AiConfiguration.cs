@@ -19,7 +19,7 @@ public interface IRequestBudget
 public enum AiFailure { Disabled, MissingKey, InvalidSettings, DailyLimit, Busy, Authentication, IncompatibleModel, RateLimited, Timeout, Offline, InvalidResponse, HttpError, LocalStorage, Refused, Incomplete, UnknownLanguage, InvalidLyrics, PlanSafetyUnverified, SessionExpired }
 
 // Never attach response bodies, API keys, HTTP headers or original exceptions.
-public enum AuthenticationStep { None, Consent, Callback, TokenExchange, TokenShape, IdentitySignature, IdentityClaims, IdentityMetadata, SelectedAccount }
+public enum AuthenticationStep { None, Consent, Callback, TokenExchange, TokenShape, IdentitySignature, IdentityClaims, IdentityMetadata, SelectedAccount, ModelCatalog }
 public enum OAuthFailureCode { None, InvalidGrant, InvalidClient, InvalidRequest, InvalidScope, AccessDenied, UnsupportedGrantType, Other }
 public enum InferenceStage { None, Http, Stream, CompletedResponse, InsightValidation }
 public enum InferenceCode { None, UsageLimitExceeded, UserNotEligible, ScopeNotAuthorized, UnsupportedCapability, RouteNotSupported, UsageUnavailable, Other }
@@ -28,6 +28,7 @@ public sealed class AiException(AiFailure failure) : Exception("No se pudo compl
 {
     public AiFailure Failure { get; } = failure;
     public AiUsage? Usage { get; init; }
+    public DateTimeOffset? RetryAt { get; init; }
     public AuthenticationStep AuthenticationStep { get; init; }
     public OAuthFailureCode OAuthCode { get; init; }
     public int? HttpStatus { get; init; }

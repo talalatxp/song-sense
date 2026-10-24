@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+ <PropertyGroup><OutputType>WinExe</OutputType><TargetFramework>net10.0-windows10.0.19041.0</TargetFramework><UseWPF>true</UseWPF><StartupObject>Preview</StartupObject><SongSenseSourceRoot Condition="'$(SongSenseSourceRoot)' == ''">../..</SongSenseSourceRoot><DefineConstants Condition="'$(SongSenseSourceRoot)' == '../..'">$(DefineConstants);CURRENT_LIFETIME</DefineConstants></PropertyGroup>
+ <PropertyGroup><ApplicationManifest>../../src/SongSense.App/app.manifest</ApplicationManifest></PropertyGroup>
+ <ItemGroup><ProjectReference Include="$(SongSenseSourceRoot)/src/SongSense.App/SongSense.App.csproj"/><Resource Include="$(SongSenseSourceRoot)/src/SongSense.App/Assets/SongSense.ico" Link="Assets/SongSense.ico"/></ItemGroup>
+</Project>
+

@@ -1,58 +1,65 @@
 using System.ComponentModel;
 using SongSense.Core;
-
 namespace SongSense.App;
-
 public sealed class LyricsEditorViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly MainViewModel owner;
     private readonly LyricsEditContext context;
-    private string manualText;
-    private string error = "";
+    private string manualText, originalText, error = "";
     private CandidateOption? selected;
     public LyricsEditorViewModel(MainViewModel owner, LyricsEditContext context)
     {
-        this.owner = owner;
-        this.context = context;
-        TrackLabel = $"{owner.TrackTitle} · {owner.Artist}";
-        Options = owner.Candidates.Select(candidate => new CandidateOption(candidate)).ToArray();
-        manualText = owner.OriginalLyrics;
-        ConfirmCommand = new ActionCommand(() => Commit(owner.SelectCandidate(context, Selected!.Candidate.Id)), () => IsCurrent && Selected is not null);
-        SaveCommand = new ActionCommand(() => Commit(owner.SaveManual(context, ManualText)), () => IsCurrent);
+        this.owner = owner; this.context = context; TrackLabel = $"{owner.TrackTitle} · {owner.Artist}";
+        Options = owner.Candidates.Select(c => new CandidateOption(c)).ToArray(); originalText = manualText = owner.OriginalLyrics;
+        ConfirmCommand = new AsyncCommand(() => SaveAsync(true), () => IsCurrent && !Saving && Selected is not null);
+        SaveCommand = new AsyncCommand(() => SaveAsync(), () => IsCurrent && !Saving && IsValid);
         owner.PropertyChanged += OwnerChanged;
     }
     public string TrackLabel { get; }
     public IReadOnlyList<CandidateOption> Options { get; }
-    public string VersionsMessage => Options.Count == 0 ? "No hay versiones disponibles. Puedes introducir una letra manual." : "Selecciona una versión y confírmala para preparar su letra.";
+    public bool PreferManual => Options.Count == 0;
+    public string VersionsMessage => Options.Count == 0 ? "No hay versiones disponibles. Puedes introducir una letra manual." : Selected is null ? "Selecciona una versión para revisar su letra." : "Vista previa de la letra completa";
     public bool IsCurrent => owner.IsEditCurrent(context);
-    public string Error => IsCurrent ? error : "La canción o la letra ha cambiado. Cierra y vuelve a abrir esta ventana.";
-    public string ManualText { get => manualText; set { manualText = value; Changed(nameof(ManualText)); Changed(nameof(CharacterCount)); } }
+    public bool Saving { get; private set; }
+    public bool CanEditDraft => !Saving;
+    public bool CanCopyDraft => ManualText.Length > 0;
+    public bool HasChanges => manualText != originalText || Selected is not null;
+    public bool IsValid => !string.IsNullOrWhiteSpace(ManualText) && ManualText.Length <= 20_000;
+    public string Error => !IsCurrent ? "La canción o la letra ha cambiado. El borrador sigue vinculado a la canción original; puedes editarlo y copiarlo, pero no aplicarlo aquí."
+        : error.Length > 0 ? error : !IsValid && Selected is null ? ManualText.Length > 20_000 ? "Supera 20.000 caracteres. Corrige el exceso; no se recorta el texto." : "Introduce una letra que no esté vacía." : "";
+    public string SaveMessage { get; private set; } = "Borrador sin guardar · solo en esta ventana.";
+    public string ManualText { get => manualText; set { manualText = value; error = ""; Notify(); } }
     public string CharacterCount => $"{ManualText.Length:N0} / 20.000 caracteres";
-    public CandidateOption? Selected { get => selected; set { selected = value; Changed(nameof(Selected)); Changed(nameof(Preview)); ConfirmCommand.Refresh(); } }
+    public CandidateOption? Selected { get => selected; set { selected = value; error = ""; Notify(); } }
     public string Preview => Selected is null ? "" : Selected.Candidate.IsInstrumental ? "Esta canción es instrumental" : LyricsResolution.TextOf(Selected.Candidate);
-    public ActionCommand ConfirmCommand { get; }
-    public ActionCommand SaveCommand { get; }
+    public string PreviewStanza => string.Join("\n", Preview.Replace("\r\n", "\n").Split("\n\n", StringSplitOptions.RemoveEmptyEntries).Take(1));
+    public AsyncCommand ConfirmCommand { get; }
+    public AsyncCommand SaveCommand { get; }
     public event EventHandler? Committed;
     public event PropertyChangedEventHandler? PropertyChanged;
-    private void Commit(string? failure)
+    public async Task SaveAsync(bool version = false)
     {
-        error = failure ?? "";
-        Changed(nameof(Error));
-        if (failure is null) Committed?.Invoke(this, EventArgs.Empty);
+        if (!IsCurrent || Saving || (version ? Selected is null : !IsValid)) return;
+        Saving = true; Notify();
+        try
+        {
+            var result = await owner.SaveEditedLyricsAsync(context, version ? null : ManualText, version ? Selected?.Candidate.Id : null);
+            error = result.Success ? "" : result.Message; SaveMessage = result.Message;
+            if (result.Success) { originalText = manualText; selected = null; Committed?.Invoke(this, EventArgs.Empty); }
+        }
+        finally { Saving = false; Notify(); }
     }
-    private void OwnerChanged(object? sender, PropertyChangedEventArgs args)
+    private void OwnerChanged(object? sender, PropertyChangedEventArgs args) => Notify();
+    private void Notify()
     {
-        Changed(nameof(IsCurrent)); Changed(nameof(Error));
+        foreach (var name in new[] { nameof(CanCopyDraft), nameof(VersionsMessage), nameof(ManualText), nameof(CharacterCount), nameof(Selected), nameof(Preview), nameof(PreviewStanza), nameof(IsCurrent), nameof(Saving), nameof(CanEditDraft), nameof(HasChanges), nameof(IsValid), nameof(Error), nameof(SaveMessage) }) PropertyChanged?.Invoke(this, new(name));
         ConfirmCommand.Refresh(); SaveCommand.Refresh();
     }
-    private void Changed(string property) => PropertyChanged?.Invoke(this, new(property));
     public void Dispose() => owner.PropertyChanged -= OwnerChanged;
 }
-
 public sealed record CandidateOption(LyricsCandidate Candidate)
 {
     public override string ToString() => $"{Title} · {Details}";
     public string Title => Candidate.Title;
-    public string Details => $"{Candidate.Artist} · {Candidate.Album ?? "Álbum desconocido"}\n" +
-        (Candidate.Duration is { } duration ? $"{(int)duration.TotalMinutes}:{duration.Seconds:00}" : "Duración desconocida") + $" · LRCLIB #{Candidate.Id}";
+    public string Details => $"{Candidate.Artist} · {Candidate.Album ?? "Álbum desconocido"} · " + (Candidate.Duration is { } d ? $"{(int)d.TotalMinutes}:{d.Seconds:00}" : "Duración desconocida");
 }

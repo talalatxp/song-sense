@@ -15,10 +15,18 @@ public sealed class DesktopTray : IDisposable
         var pause = new Forms.ToolStripMenuItem();
         pause.Click += (_, _) => model.AutomaticUpdatesEnabled = !model.AutomaticUpdatesEnabled;
         menu.Items.Add(pause);
-        menu.Opening += (_, _) => pause.Text = model.AutomaticUpdatesEnabled ? "Pausar actualización" : "Reanudar actualización";
+        menu.Opening += (_, _) => pause.Text = model.AutomaticUpdatesEnabled ? "Pausar seguimiento" : "Reanudar seguimiento";
         menu.Items.Add(new Forms.ToolStripSeparator()); menu.Items.Add("Salir", null, (_, _) => exit());
-        icon = new Forms.NotifyIcon { Icon = drawingIcon, Text = "Song Sense · Cerrar oculta; Salir termina", ContextMenuStrip = menu, Visible = true };
+        icon = new Forms.NotifyIcon { Icon = drawingIcon, Text = "Song Sense · Abrir, seguimiento y Salir", ContextMenuStrip = menu, Visible = true };
         icon.DoubleClick += (_, _) => open();
+        icon.BalloonTipClicked += (_, _) => open();
+    }
+    public void ShowFirstHideHint()
+    {
+        icon.BalloonTipTitle = "Song Sense sigue en la bandeja";
+        icon.BalloonTipText = "Pulsa aquí para Abrir. Doble clic en el icono también abre la ventana. Para terminar: clic derecho en el icono → Salir. Ocultar no habilita análisis.";
+        icon.BalloonTipIcon = Forms.ToolTipIcon.Info;
+        icon.ShowBalloonTip(8000);
     }
     public void Dispose() { icon.Visible = false; icon.ContextMenuStrip?.Dispose(); icon.Dispose(); drawingIcon.Dispose(); }
 }

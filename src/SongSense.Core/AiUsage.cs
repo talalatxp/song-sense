@@ -7,6 +7,7 @@ public sealed record AiUsage(long InputTokens, long OutputTokens, long TotalToke
 }
 
 public enum AiConnectionMode { ChatGptIncluded, ApiKey }
+public enum AnalysisSessionState { Unavailable, PendingRegistration, Disconnected, PermissionRequired, ModelRequired, ConfirmationRequired, Ready }
 
 public interface IAnalysisSession
 {
@@ -14,6 +15,7 @@ public interface IAnalysisSession
     string? Model { get; }
     string CacheScope { get; }
     bool CanGenerate { get; }
+    AnalysisSessionState Readiness => CanGenerate ? AnalysisSessionState.Ready : AnalysisSessionState.Disconnected;
     string Status { get; }
     event EventHandler? Changed;
 }

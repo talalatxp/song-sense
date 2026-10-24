@@ -6,7 +6,7 @@ $portableOutput = [IO.Path]::GetFullPath($OutputDirectory)
 $portableSdk = Join-Path $env:LOCALAPPDATA 'SongSenseTools\dotnet\dotnet.exe'
 $portableDotnet = if (Test-Path -LiteralPath $portableSdk) { $portableSdk } else { (Get-Command dotnet -ErrorAction Stop).Source }
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
-$portableName = 'SongSense-win-x64-F11-' + [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss') + '-' + [Guid]::NewGuid().ToString('N').Substring(0,6)
+$portableName = 'SongSense-win-x64-0.14.0-preview.1-' + [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss') + '-' + [Guid]::NewGuid().ToString('N').Substring(0,6)
 $portableFolder = Join-Path $portableOutput $portableName
 $portableZip = $portableFolder + '.zip'
 if (Test-Path -LiteralPath $portableFolder) { throw 'Release directory already exists. No overwrite is allowed.' }
@@ -26,9 +26,8 @@ try {
  # Publish to a NEW folder; never copy the installed application or LocalAppData.
  & $portableDotnet publish src/SongSense.App/SongSense.App.csproj -c Release -r win-x64 --self-contained true -p:PublishTrimmed=false -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false -p:CopyOutputSymbolsToPublishDirectory=false "-p:PathMap=$portableRepo=/_/SongSense" -p:NuGetLockFilePath=obj/portable.packages.lock.json -o $portableFolder
  if ($LASTEXITCODE -ne 0) { throw 'Portable publish failed. No ZIP will be created.' }
- foreach ($document in @{ 'ENTREGA_PORTABLE.md'='LEEME.md'; 'VALIDACION_F11.md'='VALIDACION.md'; 'TERCEROS.md'='TERCEROS.md' }.GetEnumerator()) {
-  Copy-Item -LiteralPath (Join-Path $portableRepo "docs\$($document.Key)") -Destination (Join-Path $portableFolder $document.Value)
- }
+ Copy-Item -LiteralPath "$portableRepo\README.md" -Destination "$portableFolder\LEEME.md"
+ Copy-Item -LiteralPath "$portableRepo\THIRD-PARTY-NOTICES.txt" -Destination "$portableFolder\TERCEROS.txt"
  Copy-Item -LiteralPath "$portableRepo\src\SongSense.App\Assets\SongSense.ico" -Destination "$portableFolder\SongSense.ico"
  $portableDependencies = @{}
  foreach ($project in @('SongSense.App','SongSense.Core','SongSense.Infrastructure')) {
@@ -42,7 +41,7 @@ try {
  $packageRoot = @($assets.packageFolders.Keys)[0]
  $licenseDirectory = Join-Path $portableFolder 'Licenses'
  New-Item -ItemType Directory -Path $licenseDirectory | Out-Null
- Copy-Item -LiteralPath "$portableRepo\docs\licenses\Apache-2.0.txt" -Destination "$licenseDirectory\Apache-2.0.txt"
+ Copy-Item -LiteralPath "$portableRepo\licenses\Apache-2.0.txt" -Destination "$licenseDirectory\Apache-2.0.txt"
  $notices = [Collections.Generic.List[string]]::new()
  $portableLibraries = @{} + $assets.libraries
  $runtimeConfig = Get-Content -LiteralPath "$portableFolder\SongSense.runtimeconfig.json" -Raw | ConvertFrom-Json -AsHashtable
@@ -71,7 +70,7 @@ try {
  }
  $notices | Set-Content -LiteralPath "$licenseDirectory\PACKAGE-NOTICES.txt" -Encoding utf8
  $portableManifest = [ordered]@{ release=$portableName; runtime='win-x64'; selfContained=$true; trimming=$false; singleFile=$false;
-  validation='Controlled tests passed; real-provider acceptance pending. ChatGPT generation remains blocked.';
+  validation='Prerelease: controlled tests passed; real-provider, accessibility and participant acceptance pending. ChatGPT use requires explicit session confirmation.';
   dependencies=$portableDependencies;
   files=@(Get-ChildItem -LiteralPath $portableFolder -Recurse -File | Sort-Object FullName | ForEach-Object {
    @{ name=[IO.Path]::GetRelativePath($portableFolder,$_.FullName).Replace('\','/'); sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash }

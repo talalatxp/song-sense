@@ -9,7 +9,7 @@ internal static class WindowAppearance
     public static void Apply(Window window)
     {
         // Retain the native title bar and its keyboard/window management behavior.
-        var enabled = 1;
+        var enabled = SystemParameters.HighContrast ? 0 : 1;
         _ = DwmSetWindowAttribute(new WindowInteropHelper(window).Handle, 20, ref enabled, sizeof(int));
     }
 

@@ -1,8 +1,8 @@
-# Run from PowerShell after using Salir in SongSense (Cerrar hides to tray).
+# Run from PowerShell after using Salir in SongSense (closing may hide, according to preferences).
 # taskbar pinning itself remains a Windows UI action, performed once by the user/agent.
 $ErrorActionPreference = 'Stop'
 if (Get-Process -Name SongSense -ErrorAction SilentlyContinue) {
- throw 'Song Sense sigue abierto. Usa Salir en la ventana o en su bandeja; cerrar la ventana solo la oculta. Después repite la actualización.'
+ throw 'Song Sense sigue abierto. Usa Salir en la ventana o en su bandeja; cerrar puede ocultarla según tus preferencias. Después repite la actualización.'
 }
 $repoDirectory = [System.IO.Path]::GetFullPath("$PSScriptRoot\..")
 $localSdk = Join-Path $env:LOCALAPPDATA 'SongSenseTools\dotnet\dotnet.exe'

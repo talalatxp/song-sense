@@ -3,14 +3,14 @@
 param()
 $ErrorActionPreference = 'Stop'
 $fixtureBase = [IO.Path]::GetFullPath("$PSScriptRoot\..\artifacts\portable-audit-tests\" + [Guid]::NewGuid().ToString('N'))
-$fixtureFolder = Join-Path $fixtureBase 'Fixture'
+$fixtureFolder = Join-Path $fixtureBase 'Fixture-0.14.0-preview.1'
 New-Item -ItemType Directory -Path $fixtureFolder -Force | Out-Null
 $fixtureAudit = Join-Path $PSScriptRoot 'Test-PortablePackage.ps1'
 foreach ($name in @('SongSense.exe','SongSense.dll','SongSense.Core.dll','SongSense.Infrastructure.dll','coreclr.dll',
  'System.Private.CoreLib.dll','PresentationFramework.dll','e_sqlite3.dll')) {
  [IO.File]::WriteAllBytes((Join-Path $fixtureFolder $name), [byte[]](0x4d,0x5a,0x00))
 }
-foreach ($name in @('LEEME.md','VALIDACION.md','TERCEROS.md','SongSense.runtimeconfig.json','SongSense.deps.json')) {
+foreach ($name in @('LEEME.md','TERCEROS.txt','SongSense.runtimeconfig.json','SongSense.deps.json')) {
  [IO.File]::WriteAllText((Join-Path $fixtureFolder $name), 'Synthetic audit fixture')
 }
 $fixtureManifest = @{runtime='win-x64';selfContained=$true;trimming=$false;files=@(Get-ChildItem -LiteralPath $fixtureFolder -File | ForEach-Object {
@@ -28,13 +28,13 @@ foreach ($case in $fixtureCases) {
  $archive = [IO.Compression.ZipFile]::Open($zipPath,[IO.Compression.ZipArchiveMode]::Update)
  try {
   $name = switch ($case) {
-   'personal-database' { 'Fixture/songsense.db' }
-   'simulated-credential' { $archive.GetEntry('Fixture/LEEME.md').Delete(); 'Fixture/LEEME.md' }
-   'profile-path' { $archive.GetEntry('Fixture/LEEME.md').Delete(); 'Fixture/LEEME.md' }
-   'digest-tamper' { $archive.GetEntry('Fixture/LEEME.md').Delete(); 'Fixture/LEEME.md' }
-   'path-traversal' { 'Fixture/../escape.dll' }
-   'duplicate' { 'Fixture/SONGSENSE.DLL' }
-   'symbols' { 'Fixture/SongSense.pdb' }
+   'personal-database' { 'Fixture-0.14.0-preview.1/songsense.db' }
+   'simulated-credential' { $archive.GetEntry('Fixture-0.14.0-preview.1/LEEME.md').Delete(); 'Fixture-0.14.0-preview.1/LEEME.md' }
+   'profile-path' { $archive.GetEntry('Fixture-0.14.0-preview.1/LEEME.md').Delete(); 'Fixture-0.14.0-preview.1/LEEME.md' }
+   'digest-tamper' { $archive.GetEntry('Fixture-0.14.0-preview.1/LEEME.md').Delete(); 'Fixture-0.14.0-preview.1/LEEME.md' }
+   'path-traversal' { 'Fixture-0.14.0-preview.1/../escape.dll' }
+   'duplicate' { 'Fixture-0.14.0-preview.1/SONGSENSE.DLL' }
+   'symbols' { 'Fixture-0.14.0-preview.1/SongSense.pdb' }
   }
   $entry = $archive.CreateEntry($name)
   $writer = [IO.StreamWriter]::new($entry.Open())

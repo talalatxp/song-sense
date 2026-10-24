@@ -16,6 +16,9 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
     private readonly List<Task> cacheTasks = [];
     private bool storageReady;
     private long cacheEpoch;
+    private bool deletingCache;
+    public bool CanDeleteSong => cache is not null && CurrentTrack is not null && !StorageError && !deletingCache;
+    public bool CanDeleteCache => cache is not null && !StorageError && !deletingCache;
     private ResolvedLyrics? pendingCachedLyrics;
     private string cacheMessage = "";
     public string CacheMessage => cacheMessage;
@@ -26,8 +29,10 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
     private bool storageError;
     private readonly IInsightProvider? insightProvider;
     private readonly IAnalysisSession? connection;
-    private string usageMessage = "Todavía no se ha enviado ninguna consulta de IA.";
-    public string UsageMessage => usageMessage;
+    private string? appliedScope, appliedModel;
+    public AiUsagePresentation Usage { get; private set; } = new(AiUsageState.NoSolicitado);
+    public string UsageMessage => Usage.Description;
+    public AiActivityViewModel Activity { get; } = new();
     private string? EffectiveModel => connection?.Mode == AiConnectionMode.ChatGptIncluded ? connection.Model : aiSettings.Model;
     private string CacheScope => connection?.CacheScope ?? "api-key";
     private bool CanUseAi => connection?.Mode == AiConnectionMode.ChatGptIncluded ? connection.CanGenerate : (connection?.CanGenerate ?? true) && aiSettings.AiEnabled;
@@ -48,9 +53,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
     public string InsightMessage => insightMessage;
     public string TranslationMessage => Insight?.Language == targetLanguage ? $"La letra ya está en {OutputLanguages.Get(targetLanguage).Name.ToLowerInvariant()}" :
         Insight is not null ? $"Idioma original: {Insight.Language} · Traducción: {OutputLanguages.Get(targetLanguage).Name}" :
-        connection?.Mode == AiConnectionMode.ChatGptIncluded && !CanUseAi ?
-            "Las consultas con ChatGPT están pausadas. Revisa Cuenta y consumo y confirma el ajuste de créditos para habilitar el significado." :
-            "Confirma una letra y pulsa Traducir y explicar.";
+        ReadingHint;
     public string TranslatedLyrics => Insight is not null && PreparedLyrics is not null ? InsightValidation.TranslationText(PreparedLyrics.Text, Insight) : "";
     public string InsightSummary => Insight?.Summary ?? "";
     public string InsightThemes => Insight is null ? "" : string.Join('\n', Insight.Themes.Select(text => "• " + text));
@@ -62,17 +65,22 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
         aiSettings.AiEnabled ? $"API key · de pago · {aiSettings.Model} · Hoy: {TodayRequests}/{aiSettings.DailyRequestLimit}" : "API key · de pago · IA desactivada";
     public void ApplyConnectionChange()
     {
-        configurationRevision++; InvalidateInsight(); NotifyInsight();
+        var sameIdentity = appliedScope == CacheScope && appliedModel == EffectiveModel;
+        appliedScope = CacheScope; appliedModel = EffectiveModel;
+        configurationRevision++; InvalidateInsight(preserveResult: sameIdentity); NotifyInsight();
         if (storageReady) QueueCacheRestore();
     }
     public void ApplyAiSettings(AppSettings settings)
     {
+        if (lastAiFailure == AiFailure.DailyLimit && settings.DailyRequestLimit > aiSettings.DailyRequestLimit) lastAiFailure = null;
+        if (lastAiFailure is AiFailure.Authentication or AiFailure.MissingKey or AiFailure.InvalidSettings or AiFailure.IncompatibleModel or AiFailure.Disabled) lastAiFailure = null;
         if (aiSettings.Model != settings.Model || aiSettings.AiEnabled != settings.AiEnabled)
         {
             configurationRevision++;
-            InvalidateInsight();
+            InvalidateInsight(preserveResult: aiSettings.Model == settings.Model);
         }
         aiSettings = settings;
+        appliedScope = CacheScope; appliedModel = EffectiveModel;
         if (insightState == ApplicationState.DailyLimit && HasQuota) insightState = null;
         OnChanged(nameof(AiConfigurationStatus));
         OnChanged(nameof(Status));
@@ -87,9 +95,9 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
     public ResolvedLyrics? PreparedLyrics { get; private set; }
     public IReadOnlyList<LyricsCandidate> Candidates { get; private set; } = [];
     public long LyricsRevision { get; private set; }
-    public bool CanEditLyrics => CurrentTrack is not null && !searching && !lifetime.IsCancellationRequested && (cache is null || storageReady && !StorageError);
+    public bool CanEditLyrics => Preparation.CanEdit;
     public string LyricsSource => PreparedLyrics is not { } lyrics ? "" : lyrics.Origin == LyricsOrigin.Manual
-        ? "Fuente: Manual" : $"Fuente: LRCLIB · ID {lyrics.LrclibId}";
+        ? "Fuente: Manual" : "Fuente: LRCLIB";
 
     public LyricsEditContext? BeginLyricsEdit() => CanEditLyrics ? new(CurrentTrack!.Revision, LyricsRevision) : null;
     public bool IsEditCurrent(LyricsEditContext context) => CanEditLyrics &&
@@ -115,8 +123,9 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
         return null;
     }
 
-    private void ConfirmLyrics(ResolvedLyrics lyrics)
+    private void ConfirmLyrics(ResolvedLyrics lyrics, bool persist = true)
     {
+        lyricsSaveState = cache is null ? ContentSaveState.SessionOnly : ContentSaveState.Pending;
         pendingCachedLyrics = null;
         InvalidateInsight();
         PreparedLyrics = lyrics;
@@ -125,7 +134,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
         lyricsState = lyrics.IsInstrumental ? ApplicationState.Ready : ApplicationState.AiNotConfigured;
         lyricsMessage = lyrics.IsInstrumental ? "Esta canción es instrumental" : "Letra confirmada. Usa Traducir y explicar cuando la IA esté activada.";
         NotifyLyrics();
-        if (CurrentTrack is { } track) QueueCacheSave(track, lyrics);
+        if (persist && CurrentTrack is { } track) QueueCacheSave(track, lyrics);
         ScheduleAutomatic(true);
     }
 
@@ -139,17 +148,17 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
         this.clock = clock ?? TimeProvider.System;
         this.cache = cache;
         this.connection = connection;
+        ResumeTrackingCommand = new ActionCommand(() => AutomaticUpdatesEnabled = true, () => CanResumeTracking);
+        appliedScope = CacheScope; appliedModel = EffectiveModel;
+        if (connection is not null) connection.Changed += ConnectionChanged;
         RetryAutomaticCommand = new AsyncCommand(RetryAutomaticAsync, () => AutomaticUpdatesEnabled && storageReady && !StorageError && CurrentTrack is not null && !automaticRunning && !automaticStopped);
         RetryStorageCommand = new AsyncCommand(InitializeAsync, () => !initializing && StorageError);
         RetryLanguageCommand = new AsyncCommand(RetryLanguageAsync, () => languageSaveFailed && CanChangeLanguage && !languageSaving);
-        SearchLyricsCommand = new AsyncCommand(SearchLyricsAsync, () => CurrentTrack is not null && !searching && !StorageError);
+        SearchLyricsCommand = new AsyncCommand(SearchLyricsAsync, () => Preparation.CanSearch);
         CancelLyricsCommand = new ActionCommand(CancelLyrics, () => searching);
-        GenerateInsightCommand = new AsyncCommand(GenerateInsightAsync, () => insightProvider is not null &&
-            CurrentTrack is not null && PreparedLyrics is { IsInstrumental: false } && !searching && !analysing &&
-            CanUseAi && !languageSaving && !languageSaveFailed && AiSettingsRules.IsValidModel(EffectiveModel) && HasQuota && !StorageError &&
-            !lifetime.IsCancellationRequested && Insight is null);
+        GenerateInsightCommand = new AsyncCommand(GenerateInsightAsync, () => Preparation.CanGenerate);
         CancelInsightCommand = new ActionCommand(CancelInsight, () => analysing);
-        RegenerateCommand = new AsyncCommand(RegenerateInsightAsync, () => Insight is not null && CanRequestInsight());
+        RegenerateCommand = new AsyncCommand(RegenerateInsightAsync, () => Preparation.CanRegenerate);
         DeleteSongCommand = new AsyncCommand(() => DeleteCacheAsync(false), () => cache is not null && CurrentTrack is not null && !StorageError);
         ClearCacheCommand = new AsyncCommand(() => DeleteCacheAsync(true), () => cache is not null && !StorageError);
         ConfirmCachedLyricsCommand = new ActionCommand(ConfirmCachedLyrics, () => pendingCachedLyrics is not null && CanEditLyrics);
@@ -199,12 +208,23 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
     public ActionCommand ConfirmCachedLyricsCommand { get; }
     public AsyncCommand RecoverStorageCommand { get; }
     public event PropertyChangedEventHandler? PropertyChanged;
-    private void OnChanged([CallerMemberName] string? property = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(property));
+    private void ConnectionChanged(object? sender, EventArgs args)
+    {
+        if (lifetime.IsCancellationRequested || automaticStopped) return;
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is not null && !dispatcher.CheckAccess()) dispatcher.BeginInvoke(() => { if (!automaticStopped && !lifetime.IsCancellationRequested) ApplyConnectionChange(); });
+        else ApplyConnectionChange();
+    }
+    private void OnChanged([CallerMemberName] string? property = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(property));
+        if (property == nameof(CacheMessage)) PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SongDetails)));
+    }
 
     public void ApplyDetection(TrackDetection observation)
     {
         latestObservation = observation;
-        if (automaticStarted && !AutomaticUpdatesEnabled) return;
+        if (!AutomaticUpdatesEnabled) { NotifyPlaybackContext(); return; }
         ApplyActiveDetection(observation);
     }
     private void ApplyActiveDetection(TrackDetection observation)
@@ -212,6 +232,9 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
         var changed = CurrentTrack?.Revision != observation.Track?.Revision;
         if (changed)
         {
+            lyricsSaveState = ContentSaveState.SessionOnly;
+            if (!languageSaving && !languageSaveFailed) { languageMessage = ""; OnChanged(nameof(LanguageMessage)); }
+            lastLyricsFailure = null; lyricsCancelled = false;
             pendingCachedLyrics = null; cacheMessage = "";
             InvalidateInsight();
             lyricsRequest?.Cancel();
@@ -224,6 +247,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
             lyricsMessage = "";
         }
         detection = observation;
+        NotifyPlaybackContext();
         foreach (var property in new[] { nameof(CurrentTrack), nameof(TrackTitle), nameof(Artist), nameof(Album), nameof(Duration), nameof(Status), nameof(DetectionMessage) })
             OnChanged(property);
         NotifyLyrics();
@@ -233,6 +257,9 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
 
     private void NotifyLyrics()
     {
+        NotifyProvenance();
+        OnChanged(nameof(SongDetails));
+        OnChanged(nameof(CanDeleteSong)); OnChanged(nameof(CanDeleteCache));
         OnChanged(nameof(ReadingBlocks));
         foreach (var property in new[] { nameof(Status), nameof(LyricsMessage), nameof(OriginalLyrics), nameof(HasPreparedLyrics), nameof(PreparedLyrics), nameof(Candidates), nameof(LyricsRevision), nameof(CanEditLyrics), nameof(LyricsSource) }) OnChanged(property);
         SearchLyricsCommand.Refresh();
@@ -250,6 +277,8 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
         pendingCachedLyrics = null;
         lyricsRequest = request;
         searching = true;
+        lyricsSaveState = ContentSaveState.SessionOnly;
+        lastLyricsFailure = null; lyricsCancelled = false;
         PreparedLyrics = null;
         LyricsRevision++;
         Candidates = [];
@@ -281,6 +310,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
                 new LyricsSearchResult(track.Revision, cached.IsAbsence ? LyricsSearchKind.NotFound : cached.Lyrics!.IsInstrumental ? LyricsSearchKind.Instrumental : LyricsSearchKind.Matched, cached.Lyrics, []);
             if (!IsCurrent(track, request) || result.TrackRevision != track.Revision) return;
             PreparedLyrics = result.Lyrics;
+            if (cached is not null && PreparedLyrics is not null) lyricsSaveState = ContentSaveState.Saved;
             Candidates = result.Candidates;
             (lyricsState, lyricsMessage) = result.Kind switch
             {
@@ -297,6 +327,8 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
         catch (LyricsProviderException error)
         {
             if (!IsCurrent(track, request)) return;
+            lastLyricsFailure = error.Failure;
+            if (error.Failure == LyricsFailure.RateLimited) lyricsRetryAt = error.RetryAt ?? clock.GetUtcNow().AddSeconds(60);
             lyricsState = error.Failure == LyricsFailure.Offline ? ApplicationState.Offline : ApplicationState.Error;
             lyricsMessage = error.Failure switch
             {
@@ -312,6 +344,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
         catch (Exception)
         {
             if (!IsCurrent(track, request)) return;
+            lastLyricsFailure = LyricsFailure.HttpError;
             lyricsState = ApplicationState.Error;
             lyricsMessage = "No se pudo buscar la letra. Pulsa Buscar letra para reintentar.";
         }
@@ -334,6 +367,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
         lyricsRequest?.Cancel();
         lyricsRequest = null;
         searching = false;
+        lyricsCancelled = true;
         lyricsState = null;
         lyricsMessage = "Búsqueda cancelada. Puedes volver a intentarlo.";
         NotifyLyrics();
@@ -341,7 +375,10 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
 
     public async Task StopAsync()
     {
+        if (connection is not null) connection.Changed -= ConnectionChanged;
         automaticStopped = true; automaticPending = false; automaticRequest?.Cancel();
+        NotifyPlaybackContext();
+        NotifyInsight();
         CancelLyrics();
         CancelInsight();
         await automaticWorker;
@@ -349,21 +386,33 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
         await WaitForCacheAsync();
     }
 
-    private void InvalidateInsight()
+    private void InvalidateInsight(bool preserveResult = false)
     {
+        if (!preserveResult && !languageSaving && !languageSaveFailed) { languageMessage = ""; OnChanged(nameof(LanguageMessage)); }
+        var preserved = preserveResult ? Insight : null;
+        var preservedUsage = Usage;
+        var preservedSaveState = insightSaveState;
         insightRequest?.Cancel(); insightRequest = null; analysing = false;
-        Insight = null; insightState = null; insightMessage = "";
-        usageMessage = "Todavía no se ha enviado ninguna consulta de IA en este contexto.";
+        Insight = preserved; insightState = preserved is null ? null : ApplicationState.Ready; insightMessage = "";
+        insightSaveState = preserved is null ? ContentSaveState.SessionOnly : preservedSaveState;
+        lastAiFailure = null; aiCancelled = false;
+        if (Usage.State == AiUsageState.EnCurso)
+            Activity.Record(Usage with { State = AiUsageState.NoComunicado });
+        Usage = new(AiUsageState.NoSolicitado);
+        if (preserved is not null) Usage = preservedUsage.State == AiUsageState.EnCurso ? preservedUsage with { State = AiUsageState.NoComunicado } : preservedUsage;
     }
     private void NotifyInsight()
     {
+        OnChanged(nameof(LanguageNoticeKind));
+        NotifyProvenance();
         OnChanged(nameof(ReadingBlocks));
-        foreach (var property in new[] { nameof(DisplayStatus), nameof(DisplayNotice), nameof(CompactUsage), nameof(ReadingHint), nameof(ShowGenerate), nameof(ShowSearch) }) OnChanged(property);
+        foreach (var property in new[] { nameof(AiDecisionLabel), nameof(AiDecisionAction), nameof(Preparation), nameof(DisplayStatus), nameof(DisplayNotice), nameof(DisplayNoticeKind), nameof(CompactUsage), nameof(ReadingHint), nameof(ShowGenerate), nameof(ShowSearch), nameof(ShowPrimaryAction), nameof(CanPrimaryAction), nameof(PrimaryActionLabel), nameof(ShowDiagnostic), nameof(DiagnosticDetails), nameof(CanEditLyrics) }) OnChanged(property);
         OnChanged(nameof(CanChangeLanguage));
         RetryLanguageCommand.Refresh();
         if (insightState == ApplicationState.DailyLimit && HasQuota) insightState = null;
-        foreach (var property in new[] { nameof(Status), nameof(Insight), nameof(HasInsight), nameof(InsightMessage), nameof(UsageMessage), nameof(TranslationMessage), nameof(TranslatedLyrics), nameof(InsightSummary), nameof(InsightThemes), nameof(InsightMetaphors), nameof(InsightAlternatives), nameof(InsightWarnings), nameof(AiConfigurationStatus) }) OnChanged(property);
+        foreach (var property in new[] { nameof(Status), nameof(Insight), nameof(HasInsight), nameof(InsightMessage), nameof(Usage), nameof(UsageMessage), nameof(TranslationMessage), nameof(TranslatedLyrics), nameof(InsightSummary), nameof(InsightThemes), nameof(InsightMetaphors), nameof(InsightAlternatives), nameof(InsightWarnings), nameof(AiConfigurationStatus) }) OnChanged(property);
         GenerateInsightCommand.Refresh(); CancelInsightCommand.Refresh();
+        SearchLyricsCommand.Refresh();
         RegenerateCommand.Refresh();
     }
     public async Task RefreshAiUsageAsync()
@@ -373,35 +422,45 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
         {
             var count = await Task.Run(() => store.ReadRequestCountAsync(date, lifetime), lifetime);
             usageDate = date; usedRequests = count;
+            if (lastAiFailure == AiFailure.DailyLimit && aiFailureDate != date) lastAiFailure = null;
+            counterFailed = false;
+            Activity.UpdateCounter(date, count, aiSettings.DailyRequestLimit);
             NotifyInsight();
         }
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
-        catch (Exception) { insightMessage = "No se pudo actualizar el contador local. Se comprobará antes de enviar otra solicitud."; NotifyInsight(); }
+        catch (Exception) { counterFailed = true; Activity.UpdateCounter(date, null, aiSettings.DailyRequestLimit); insightMessage = "No se pudo actualizar el contador local. Se comprobará antes de enviar otra solicitud."; NotifyInsight(); }
     }
-    private bool CanRequestInsight() => insightProvider is not null && CurrentTrack is not null &&
-        PreparedLyrics is { IsInstrumental: false } && !searching && !analysing && !languageSaving && !languageSaveFailed && CanUseAi &&
-        AiSettingsRules.IsValidModel(EffectiveModel) && HasQuota && !StorageError && !lifetime.IsCancellationRequested;
     public Task GenerateInsightAsync() => GenerateInsightAsync(false);
     public Task RegenerateInsightAsync() => GenerateInsightAsync(true);
     private Task GenerateInsightAsync(bool force)
     {
         if (!(force ? RegenerateCommand.CanExecute(null) : GenerateInsightCommand.CanExecute(null)) || CurrentTrack is not { } track || PreparedLyrics is not { } lyrics) return Task.CompletedTask;
         var revision = LyricsRevision;
+        languageMessage = ""; OnChanged(nameof(LanguageMessage));
         var configuration = configurationRevision;
         var request = CancellationTokenSource.CreateLinkedTokenSource(lifetime);
         insightRequest = request; analysing = true;
+        lastAiFailure = null; aiCancelled = false;
         insightMessage = "Traduciendo y explicando… Solicitud de pago en curso.";
-        usageMessage = "Consumo pendiente de comunicar por OpenAI; no se puede calcular el porcentaje del plan a partir de tokens.";
+        Usage = NewUsage(AiUsageState.EnCurso, "Análisis", track, revision);
+        Activity.Record(Usage);
         NotifyInsight();
         generations.RemoveAll(task => task.IsCompleted);
-        var task = GenerateCoreAsync(track, lyrics, revision, configuration, EffectiveModel!, CacheScope, targetLanguage, force, request);
+        var task = GenerateCoreAsync(track, lyrics, revision, configuration, EffectiveModel!, CacheScope, targetLanguage, force, request, Usage);
         generations.Add(task);
         return task;
     }
     private bool InsightIsCurrent(CurrentTrack track, long revision, long configuration, CancellationTokenSource request) =>
         !request.IsCancellationRequested && ReferenceEquals(insightRequest, request) && CurrentTrack?.Revision == track.Revision &&
         LyricsRevision == revision && configurationRevision == configuration;
-    private async Task GenerateCoreAsync(CurrentTrack track, ResolvedLyrics lyrics, long revision, long configuration, string model, string scope, string language, bool force, CancellationTokenSource request)
+    private void RecordUsage(AiUsagePresentation activity)
+    {
+        Activity.Record(activity);
+        // Cancellation leaves the same usage context visible; later reported figures are
+        // still useful there, but never in a different song/configuration/revision.
+        if (Usage.Sequence == activity.Sequence) { Usage = activity; NotifyInsight(); }
+    }
+    private async Task GenerateCoreAsync(CurrentTrack track, ResolvedLyrics lyrics, long revision, long configuration, string model, string scope, string language, bool force, CancellationTokenSource request, AiUsagePresentation activity)
     {
         try
         {
@@ -411,8 +470,10 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
             if (!InsightIsCurrent(track, revision, configuration, request)) return;
             var fromCache = result is not null;
             result ??= await insightProvider!.GenerateAsync(track, lyrics, language, request.Token);
+            activity = activity with { State = fromCache ? AiUsageState.RecuperadoDeCache : result.Usage is null ? AiUsageState.NoComunicado : AiUsageState.Comunicado, Tokens = fromCache ? null : result.Usage };
+            RecordUsage(activity);
             if (!InsightIsCurrent(track, revision, configuration, request)) return;
-            usageMessage = fromCache ? "Caché local · 0 tokens nuevos; no se ha enviado una consulta." : DescribeUsage(result.Usage);
+            Usage = activity;
             if (result.TrackRevision != track.Revision) throw new AiException(AiFailure.InvalidResponse);
             if (result.TargetLanguage != language) throw new AiException(AiFailure.InvalidResponse);
             if (result.Model is not null && result.Model != model || result.PromptVersion is not null && result.PromptVersion != CacheIdentity.Version)
@@ -422,29 +483,45 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
                 return;
             }
             Insight = result with { LyricsRevision = revision };
+            insightSaveState = fromCache ? ContentSaveState.Saved : cache is null ? ContentSaveState.SessionOnly : ContentSaveState.Pending;
             insightState = ApplicationState.Ready;
             insightMessage = "Análisis recibido y formato validado. Interpretación generada por IA.";
-            if (cache is not null)
+            NotifyInsight();
+            if (cache is not null && !fromCache)
             {
-                try { await CacheIoAsync(async () => { await cache.SaveInsightAsync(track, lyrics, model, CacheIdentity.Version, result, request.Token, scope, language); return true; }, request.Token); }
+                try { await CacheIoAsync(async () => { await cache.SaveInsightAsync(track, lyrics, model, CacheIdentity.Version, result, request.Token, scope, language); return true; }, request.Token); if (InsightIsCurrent(track, revision, configuration, request)) { insightSaveState = ContentSaveState.Saved; lyricsSaveState = ContentSaveState.Saved; } }
                 catch (OperationCanceledException) when (request.IsCancellationRequested) { }
-                catch (Exception) { cacheMessage = "El análisis se muestra, pero no se pudo guardar en la caché local."; OnChanged(nameof(CacheMessage)); }
+                catch (Exception) { if (InsightIsCurrent(track, revision, configuration, request)) { insightSaveState = ContentSaveState.Failed; cacheMessage = "El análisis se muestra, pero no se pudo guardar en la caché local."; OnChanged(nameof(CacheMessage)); } }
             }
         }
-        catch (OperationCanceledException) when (request.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (request.IsCancellationRequested)
+        {
+            if (activity.State == AiUsageState.EnCurso) activity = activity with { State = AiUsageState.NoComunicado };
+            RecordUsage(activity);
+            if (ReferenceEquals(insightRequest, request)) Usage = activity;
+        }
         catch (AiException error)
         {
+            // Preserve usage already received even if subsequent validation rejects the result.
+            activity = activity with { State = error.Usage is not null || activity.Tokens is not null ? AiUsageState.Comunicado : AiUsageState.NoComunicado, Tokens = error.Usage ?? activity.Tokens };
+            RecordUsage(activity);
             if (!InsightIsCurrent(track, revision, configuration, request)) return;
-            usageMessage = DescribeUsage(error.Usage);
+            lastAiFailure = error.Failure;
+            aiFailureDate = LocalDate;
+            if (error.Failure == AiFailure.RateLimited) aiRetryAt = error.RetryAt ?? clock.GetUtcNow().AddSeconds(60);
+            Usage = activity;
             insightState = error.Failure == AiFailure.DailyLimit ? ApplicationState.DailyLimit :
                 error.Failure == AiFailure.Offline ? ApplicationState.Offline : ApplicationState.Error;
             insightMessage = AiSettingsViewModel.Describe(error, connection?.Mode == AiConnectionMode.ChatGptIncluded);
         }
         catch (Exception)
         {
+            activity = activity with { State = activity.Tokens is null ? AiUsageState.NoComunicado : AiUsageState.Comunicado };
+            RecordUsage(activity);
             if (!InsightIsCurrent(track, revision, configuration, request)) return;
+            lastAiFailure = AiFailure.LocalStorage;
             insightState = ApplicationState.Error;
-            usageMessage = DescribeUsage(null);
+            Usage = activity;
             insightMessage = "No se pudo analizar la letra. No se muestran resultados parciales ni se reintentará automáticamente.";
         }
         finally
@@ -457,12 +534,16 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
     public void CancelInsight()
     {
         if (!analysing) return;
+        var cancelled = Usage.State == AiUsageState.EnCurso ? Usage with { State = AiUsageState.NoComunicado } : Usage;
         InvalidateInsight();
         insightMessage = "Análisis cancelado. La solicitud reservada cuenta para el límite diario.";
-        usageMessage = "Consulta cancelada · Consumo no comunicado; puede haber consumido tokens.";
+        Usage = cancelled;
+        aiCancelled = true;
         NotifyInsight();
     }
-    private static string DescribeUsage(AiUsage? usage) => usage is null ? "Consumo no comunicado por OpenAI; no equivale a 0 tokens." : usage.Describe();
+    private AiUsagePresentation NewUsage(AiUsageState state, string operation, CurrentTrack track, long revision) =>
+        new(state, Context: new(operation, track.Title, track.Revision, revision, targetLanguage,
+            connection?.Mode ?? AiConnectionMode.ApiKey, EffectiveModel, CacheScope), At: clock.GetLocalNow());
 
     public async Task InitializeAsync()
     {
@@ -470,6 +551,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
         initializing = true;
         RetryStorageCommand.Refresh();
         StorageMessage = "Preparando almacenamiento local…";
+        NotifyInsight();
         try
         {
             // Microsoft.Data.Sqlite performs local I/O synchronously; keep it off the UI thread.
@@ -538,14 +620,14 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
                     NotifyLyrics(); return;
                 }
                 if (song.IsAbsence) { lyricsState = ApplicationState.NoLyrics; lyricsMessage = "Ausencia guardada durante una hora desde la consulta original."; NotifyLyrics(); return; }
-                PreparedLyrics = song.Lyrics; LyricsRevision++; revision = LyricsRevision;
+                PreparedLyrics = song.Lyrics; lyricsSaveState = ContentSaveState.Saved; LyricsRevision++; revision = LyricsRevision;
                 lyricsMessage = "Letra recuperada de la caché local."; NotifyLyrics();
             }
-            if (PreparedLyrics is { IsInstrumental: false } lyrics && AiSettingsRules.IsValidModel(EffectiveModel))
+            if (Insight is null && PreparedLyrics is { IsInstrumental: false } lyrics && AiSettingsRules.IsValidModel(EffectiveModel))
             {
                 var insight = await CacheIoAsync(() => cache!.ReadInsightAsync(lyrics, EffectiveModel!, CacheIdentity.Version, lifetime, track, CacheScope, language), lifetime);
                 if (CacheContextCurrent(track, revision, configuration, epoch) && !analysing && insight is not null)
-                { Insight = insight with { LyricsRevision = revision }; insightState = ApplicationState.Ready; insightMessage = "Análisis recuperado de la caché local, sin solicitud de IA."; usageMessage = "Caché local · 0 tokens nuevos; no se ha enviado una consulta."; NotifyInsight(); }
+                { Insight = insight with { LyricsRevision = revision }; insightSaveState = ContentSaveState.Saved; insightState = ApplicationState.Ready; insightMessage = "Análisis recuperado de la caché local, sin solicitud de IA."; Usage = NewUsage(AiUsageState.RecuperadoDeCache, "Lectura guardada", track, revision); Activity.Record(Usage); NotifyInsight(); }
             }
             else if (PreparedLyrics is { IsInstrumental: true }) { lyricsState = ApplicationState.Ready; lyricsMessage = "Esta canción es instrumental · Caché local"; NotifyLyrics(); }
         }
@@ -556,17 +638,19 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
         !lifetime.IsCancellationRequested && CurrentTrack?.Revision == track.Revision && LyricsRevision == revision && configurationRevision == configuration && epoch == cacheEpoch;
     private void QueueCacheSave(CurrentTrack track, ResolvedLyrics? lyrics)
     {
+        if (lyrics is not null && ReferenceEquals(lyrics, PreparedLyrics)) lyricsSaveState = cache is null ? ContentSaveState.SessionOnly : ContentSaveState.Pending;
         if (cache is not null) TrackCacheTask(SaveCacheLyricsAsync(track, lyrics, cacheEpoch));
     }
     private async Task SaveCacheLyricsAsync(CurrentTrack track, ResolvedLyrics? lyrics, long epoch)
     {
         try
         {
-            await CacheIoAsync(async () => { if (epoch != cacheEpoch) return false; await cache!.SaveLyricsAsync(track, lyrics, lifetime); return true; }, lifetime);
+            var written = await CacheIoAsync(async () => { if (epoch != cacheEpoch) return false; await cache!.SaveLyricsAsync(track, lyrics, lifetime); return true; }, lifetime);
+            if (written && epoch == cacheEpoch && ReferenceEquals(lyrics, PreparedLyrics)) { lyricsSaveState = ContentSaveState.Saved; NotifyProvenance(); }
             if (epoch == cacheEpoch && CurrentTrack?.Revision == track.Revision) QueueCacheRestore();
         }
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
-        catch (Exception) { cacheMessage = "La letra se muestra, pero no se pudo guardar en la caché local."; OnChanged(nameof(CacheMessage)); }
+        catch (Exception) { if (epoch == cacheEpoch && ReferenceEquals(lyrics, PreparedLyrics)) { lyricsSaveState = ContentSaveState.Failed; cacheMessage = "La letra se muestra, pero no se pudo guardar en la caché local."; NotifyProvenance(); OnChanged(nameof(CacheMessage)); } }
     }
     private void ConfirmCachedLyrics()
     {
@@ -574,10 +658,21 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
         pendingCachedLyrics = null; cacheMessage = "Letra guardada confirmada explícitamente.";
         ConfirmLyrics(lyrics with { TrackRevision = track.Revision });
     }
-    public async Task DeleteCacheAsync(bool all)
+    public CacheDeletionRequest? BeginCacheDeletion(bool all) => (all ? CanDeleteCache : CanDeleteSong)
+        ? new(all, CurrentTrack?.Revision, LyricsRevision, cacheEpoch, all ? "toda la caché" : $"{TrackTitle} · {Artist}") : null;
+    public async Task<bool> ConfirmCacheDeletionAsync(CacheDeletionRequest request)
     {
-        if (cache is null || StorageError || (!all && CurrentTrack is null)) return;
+        if (request.TrackRevision != CurrentTrack?.Revision || request.LyricsRevision != LyricsRevision || request.Epoch != cacheEpoch || deletingCache)
+        { cacheMessage = "El contexto ha cambiado. Revisa de nuevo qué contenido quieres eliminar."; OnChanged(nameof(CacheMessage)); return false; }
+        return await DeleteCacheCoreAsync(request.All);
+    }
+    public async Task DeleteCacheAsync(bool all) => _ = await DeleteCacheCoreAsync(all);
+    private async Task<bool> DeleteCacheCoreAsync(bool all)
+    {
+        if (cache is null || StorageError || deletingCache || (!all && CurrentTrack is null)) return false;
         var track = CurrentTrack;
+        deletingCache = true;
+        automaticSequence++; automaticPending = false; automaticRequest?.Cancel();
         cacheEpoch++; CancelLyrics(); InvalidateInsight(); pendingCachedLyrics = null;
         PreparedLyrics = null; Candidates = []; LyricsRevision++; lyricsState = null; lyricsMessage = "";
         NotifyLyrics();
@@ -585,10 +680,11 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
         {
             await CacheIoAsync(async () => { if (all) await cache.ClearAsync(lifetime); else await cache.DeleteSongAsync(track!, lifetime); return true; }, lifetime);
             cacheMessage = all ? "Caché borrada. Clave, ajustes y contador conservados." : "Contenido de esta canción borrado. Clave y contador conservados.";
+            return true;
         }
-        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
-        catch (Exception) { cacheMessage = "No se pudo borrar la caché. Los datos locales se conservan."; }
-        OnChanged(nameof(CacheMessage));
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { return false; }
+        catch (Exception) { cacheMessage = "No se pudo completar el borrado local. Revisa el contenido y reintenta; no se confirma su eliminación."; return false; }
+        finally { deletingCache = false; OnChanged(nameof(CanDeleteSong)); OnChanged(nameof(CanDeleteCache)); NotifyLyrics(); }
     }
     public async Task RecoverStorageAsync()
     {

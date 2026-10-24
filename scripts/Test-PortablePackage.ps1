@@ -22,10 +22,10 @@ function Test-PortableEntry([string]$name, [byte[]]$bytes) {
  if ($portableTotalBytes -gt 1GB) { throw 'Portable audit: unexpectedly large package.' }
  if (!$portableNames.Add($name)) { throw 'Portable audit: duplicate entry.' }
  if ($name -match '[\\:]|(^|/)\.\.?(/|$)' -or $name.StartsWith('/')) { throw 'Portable audit: unsafe entry path.' }
- # Fresh publish only: assemblies, runtime metadata, icon and the three public documents.
+ # Fresh publish only: assemblies, runtime metadata, icon, user guide and third-party notices.
  $allowed = $name -match '\A(?:[a-z]{2}(?:-[A-Za-z]{2,4})?/)?[A-Za-z0-9_.-]+\.dll\z' -or
   $name -in @('SongSense.exe','createdump.exe','SongSense.ico','SongSense.deps.json','SongSense.runtimeconfig.json',
-   'LEEME.md','VALIDACION.md','TERCEROS.md','release-manifest.json') -or $name -match '\ALicenses/[A-Za-z0-9_.-]+\.txt\z'
+   'LEEME.md','TERCEROS.txt','release-manifest.json') -or $name -match '\ALicenses/[A-Za-z0-9_.-]+\.txt\z'
  if (!$allowed) { throw 'Portable audit: entry outside release allowlist (data, logs, symbols, sources and credentials are forbidden).' }
  if ($name -match '\.(?:dll|exe)$' -and ($bytes.Length -lt 2 -or $bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a)) { throw 'Portable audit: invalid executable header.' }
  foreach ($encoding in @([Text.Encoding]::UTF8,[Text.Encoding]::Unicode,[Text.Encoding]::BigEndianUnicode)) {
@@ -58,7 +58,7 @@ if (Test-Path -LiteralPath $portablePath -PathType Container) {
   $portableRoot = $null
   if ($portableArchive.Entries.Count -gt 1000) { throw 'Portable audit: too many entries.' }
   foreach ($entry in $portableArchive.Entries) {
-   if ($entry.FullName -notmatch '\A([A-Za-z0-9_-]+)/(.+)\z') { throw 'Portable audit: ZIP requires a single release folder.' }
+   if ($entry.FullName -notmatch '\A([A-Za-z0-9][A-Za-z0-9_.-]*)/(.+)\z') { throw 'Portable audit: ZIP requires a single release folder.' }
    if ($null -eq $portableRoot) { $portableRoot = $Matches[1] }
    if ($Matches[1] -ne $portableRoot) { throw 'Portable audit: multiple ZIP roots.' }
    $name = $Matches[2]
@@ -79,7 +79,7 @@ if (Test-Path -LiteralPath $portablePath -PathType Container) {
 }
 foreach ($required in @('SongSense.exe','SongSense.dll','SongSense.Core.dll','SongSense.Infrastructure.dll','coreclr.dll',
  'System.Private.CoreLib.dll','PresentationFramework.dll','e_sqlite3.dll','SongSense.runtimeconfig.json','SongSense.deps.json',
- 'LEEME.md','VALIDACION.md','TERCEROS.md','release-manifest.json')) {
+ 'LEEME.md','TERCEROS.txt','release-manifest.json')) {
  if (!$portableNames.Contains($required)) { throw "Portable audit: missing required release component [$required]." }
 }
 if ($null -eq $portableManifestData -or $portableManifestData.runtime -ne 'win-x64' -or $portableManifestData.selfContained -ne $true -or $portableManifestData.trimming -ne $false) { throw 'Portable audit: invalid delivery manifest.' }

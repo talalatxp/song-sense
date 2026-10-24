@@ -130,7 +130,8 @@ public sealed class ChatGptTests : IDisposable
         Assert.False(vm.GenerateInsightCommand.CanExecute(null)); Assert.False(vm.RegenerateCommand.CanExecute(null));
         Assert.Equal(restarted.Status, vm.Status);
         Assert.DoesNotContain("sin configurar", vm.Status, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("consultas con ChatGPT están pausadas", vm.TranslationMessage);
+        Assert.Equal(vm.Preparation.Message, vm.TranslationMessage);
+        Assert.Contains("Consultas pausadas", vm.TranslationMessage);
         await vm.GenerateInsightAsync(); Assert.Equal(1, spy.Calls);
     }
 
@@ -232,7 +233,7 @@ public sealed class ChatGptTests : IDisposable
         var restarted = new ChatGptConnection(store, new ChatGptOAuthClient(http));
         await restarted.InitializeAsync(CancellationToken.None);
         using (var reopened = new ConnectionViewModel(restarted, CancellationToken.None))
-            Assert.Contains("invalid_grant", reopened.Message);
+        { Assert.Contains("InvalidGrant", reopened.DiagnosticDetails); Assert.False(reopened.ShowOperationResult); Assert.Contains("registro pendiente", reopened.PrimaryReason); }
         Assert.Equal(OAuthFailureCode.InvalidGrant, restarted.LoginCode);
         Assert.Equal(400, restarted.LoginHttpStatus);
         Assert.Equal(AuthenticationStep.TokenExchange, restarted.LoginStep);
@@ -365,7 +366,8 @@ public sealed class ChatGptTests : IDisposable
         Assert.Equal(expected, persisted.LoginCode); Assert.Equal(400, persisted.LoginHttpStatus);
         Assert.DoesNotContain("private-response", JsonSerializer.Serialize(persisted));
         using var view = new ConnectionViewModel(connection, CancellationToken.None);
-        Assert.Contains("HTTP 400", view.Message); Assert.DoesNotContain("private-response", view.Message);
+        Assert.Contains("HTTP: 400", view.DiagnosticDetails); Assert.DoesNotContain("private-response", view.DiagnosticDetails);
+        Assert.False(view.ShowOperationResult); Assert.Contains("registro pendiente", view.PrimaryReason);
         Assert.False(connection.Connected); Assert.False(connection.CanGenerate);
     }
 
@@ -462,7 +464,7 @@ public sealed class ChatGptTests : IDisposable
         await loading;
         Assert.True(view.CanLoadModels); Assert.False(view.CanCancel); Assert.True(connection.Connected); Assert.False(connection.CanGenerate);
         if (status == HttpStatusCode.Forbidden)
-        { Assert.Contains("HTTP 403", view.ModelMessage); Assert.False(view.CanSelectModel); }
+        { Assert.Contains("HTTP: 403", view.DiagnosticDetails); Assert.DoesNotContain("HTTP", view.ModelMessage); Assert.False(view.CanSelectModel); }
         else if (count == 0)
         { Assert.Contains("no devolvió modelos", view.ModelMessage); Assert.False(view.CanSelectModel); }
         else
@@ -474,6 +476,28 @@ public sealed class ChatGptTests : IDisposable
         Assert.True((await store.ReadAsync(CancellationToken.None)).Registrations[0].HasSession);
     }
 
+    [Theory]
+    [InlineData(0, null, 1)] [InlineData(1, null, 2)] [InlineData(1, "model-a", 3)] [InlineData(2, "model-a", 3)]
+    public async Task GuidedStepsUseHumanLabelsAndNeverGenerateOrRememberCreditAcceptance(int count, string? model, int step)
+    {
+        var store = Store; var registrations = Enumerable.Range(0, count).Select(i => new ChatGptRegistration {
+            ClientId = ClientId + i, Subject = "subject-" + i, Email = "fixture@example.invalid", Model = model,
+            AccessToken = "test-access", RefreshToken = "test-refresh", ExpiresAt = DateTimeOffset.UtcNow.AddHours(1), Scopes = [ChatGptOAuthClient.PlanScope] }).ToList();
+        await store.SaveAsync(new ChatGptCredentials { Registrations = registrations, ActiveClientId = registrations.FirstOrDefault()?.ClientId }, CancellationToken.None);
+        using var handler = new Handler(_ => throw new InvalidOperationException("No network allowed for configuration")); using var http = new HttpClient(handler);
+        var connection = new ChatGptConnection(store, new ChatGptOAuthClient(http)); await connection.InitializeAsync(CancellationToken.None);
+        using var vm = new ConnectionViewModel(connection, CancellationToken.None); Assert.Equal(step, vm.Step); Assert.Equal(count > 1, vm.ShowAccountSelector);
+        Assert.False(vm.CreditsDisabledConfirmed); Assert.False(vm.CanEnablePlan); Assert.DoesNotContain("test-access", vm.DiagnosticDetails);
+        Assert.All(vm.Accounts, a => { Assert.Contains("Registro", a.Label); Assert.DoesNotContain(a.ClientId, a.Label); });
+        if (step == 3)
+        {
+            vm.CreditsDisabledConfirmed = true; Assert.True(vm.CanPrimary); await vm.EnablePlanAsync(); Assert.Equal(4, vm.Step);
+            var restarted = new ChatGptConnection(store, new ChatGptOAuthClient(http)); await restarted.InitializeAsync(CancellationToken.None);
+            using var reopened = new ConnectionViewModel(restarted, CancellationToken.None); Assert.Equal(3, reopened.Step); Assert.False(reopened.CreditsDisabledConfirmed);
+            if (count > 1) { vm.SelectedClientId = registrations[1].ClientId; await vm.SelectAccountAsync(); Assert.False(vm.CreditsDisabledConfirmed); Assert.Equal(3, vm.Step); }
+        }
+        await vm.ModeAsync(AiConnectionMode.ApiKey); Assert.Equal(5, vm.Step); Assert.Contains("pago", vm.ModeDescription); Assert.Equal(0, handler.Calls);
+    }
     private sealed class UnknownLengthContent(string body) : HttpContent
     {
         protected override bool TryComputeLength(out long length) { length = 0; return false; }

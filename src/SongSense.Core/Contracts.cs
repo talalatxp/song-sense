@@ -22,6 +22,7 @@ public sealed record ResolvedLyrics(long TrackRevision, string Text,
 
 public sealed record TranslatedLine(int Id, string Text, string? SourceLanguage = null);
 public sealed record ExplainedMetaphor(string Text, string Explanation);
+public sealed record AnalysisProvenance(AiConnectionMode Mode, string Model, DateTimeOffset CreatedAt);
 public sealed record SongInsight(long TrackRevision, string Language,
     IReadOnlyList<TranslatedLine> Translation, string Summary,
     IReadOnlyList<string> Themes, IReadOnlyList<ExplainedMetaphor> Metaphors,
@@ -31,6 +32,7 @@ public sealed record SongInsight(long TrackRevision, string Language,
     public string? Model { get; init; }
     public string? PromptVersion { get; init; }
     public AiUsage? Usage { get; init; }
+    public AnalysisProvenance? Provenance { get; init; }
     public string TargetLanguage { get; init; } = OutputLanguages.Default;
 }
 

@@ -72,7 +72,7 @@ public sealed class OpenAiInsightProvider(AiConfigurationService configuration, 
                 input = new[] { new { role = "user", content = data } }, max_output_tokens = 16_384,
                 tools = System.Array.Empty<object>(), text = new { format = new { type = "json_schema", name = PromptVersion, strict = true, schema = Schema } } };
             var response = await client.SendWithUsageAsync(key, payload, token);
-            try { return InsightValidation.Parse(track.Revision, lyrics.Text, response.Text, targetLanguage) with { Model = model, PromptVersion = PromptVersion, Usage = response.Usage }; }
+            try { return InsightValidation.Parse(track.Revision, lyrics.Text, response.Text, targetLanguage) with { Model = model, PromptVersion = PromptVersion, Usage = response.Usage, Provenance = new(AiConnectionMode.ApiKey, model, DateTimeOffset.UtcNow) }; }
             catch (AiException error) { throw new AiException(error.Failure) { Usage = response.Usage }; }
         }, cancellationToken);
     }

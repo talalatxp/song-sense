@@ -43,7 +43,7 @@ public sealed class ChatGptInsightProvider(ChatGptConnection connection, HttpCli
                 await using var stream = await response.Content.ReadAsStreamAsync(deadline.Token);
                 var result = await ReadStreamAsync(stream, deadline.Token);
                 try { return InsightValidation.Parse(track.Revision, lyrics.Text, result.Text, targetLanguage) with {
-                    Model = model, PromptVersion = OpenAiInsightProvider.PromptVersion, Usage = result.Usage }; }
+                    Model = model, PromptVersion = OpenAiInsightProvider.PromptVersion, Usage = result.Usage, Provenance = new(AiConnectionMode.ChatGptIncluded, model, DateTimeOffset.UtcNow) }; }
                 catch (AiException error) { throw new AiException(error.Failure) { Usage = result.Usage, InferenceStage = InferenceStage.InsightValidation }; }
             }
             catch (OperationCanceledException) when (!current.IsCancellationRequested) { throw new AiException(AiFailure.Timeout); }
@@ -73,7 +73,8 @@ public sealed class ChatGptInsightProvider(ChatGptConnection connection, HttpCli
                     HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => AiFailure.Authentication,
                     HttpStatusCode.TooManyRequests => AiFailure.RateLimited,
                     HttpStatusCode.BadRequest or HttpStatusCode.NotFound => AiFailure.IncompatibleModel,
-                    _ => AiFailure.HttpError }) { HttpStatus = (int)response.StatusCode, InferenceStage = InferenceStage.Http, InferenceCode = code };
+                    _ => AiFailure.HttpError }) { HttpStatus = (int)response.StatusCode, InferenceStage = InferenceStage.Http, InferenceCode = code,
+                        RetryAt = response.StatusCode == HttpStatusCode.TooManyRequests ? AiRetrySchedule.Read(response) : null };
     }
 
     // Consume terminal events immediately; an SSE connection need not close after completion.

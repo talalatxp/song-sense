@@ -31,3 +31,8 @@ secrets*.json
 appsettings.Local.json
 *.dmp
 *.lnk
+
+# Internal plans, audits and evidence stay local. Only the root README is public.
+docs/
+*.md
+!/README.md

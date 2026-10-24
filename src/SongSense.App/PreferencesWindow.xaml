@@ -1,0 +1,32 @@
+<Window x:Class="SongSense.App.PreferencesWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:ui="clr-namespace:SongSense.App"
+ Title="Preferencias · Song Sense" Width="480" Height="600" MinWidth="360" MinHeight="480" WindowStartupLocation="CenterOwner" FontFamily="Segoe UI" Background="{DynamicResource Canvas}" Foreground="{DynamicResource Ink}">
+ <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel Margin="20">
+  <TextBlock Text="Preferencias" FontFamily="Georgia" FontSize="26" Foreground="{DynamicResource Gold}" Margin="0,0,0,16"/>
+  <TextBlock Text="Lectura" FontSize="18"/>
+  <TextBlock Text="Idioma de traducción y explicaciones" Margin="0,12,0,6"/>
+  <ComboBox ItemsSource="{Binding AvailableLanguages}" DisplayMemberPath="Name" SelectedValuePath="Code" SelectedValue="{Binding TargetLanguage, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanChangeLanguage}" AutomationProperties.Name="Idioma de traducción y explicaciones"/>
+  <TextBlock Text="{Binding LanguageMessage}" Style="{StaticResource OptionalText}" FontSize="12" Margin="0,8,0,0"/>
+  <Button Content="Reintentar guardado de idioma" Command="{Binding RetryLanguageCommand}" Margin="0,8,0,0"/>
+  <TextBlock Text="Tamaño del texto · 12 a 24 puntos" Margin="0,16,0,8"/>
+  <Slider x:Name="ReadingSize" Minimum="12" Maximum="24" TickFrequency="1" IsSnapToTickEnabled="True" Value="{Binding Owner.ReadingFontSize, RelativeSource={RelativeSource AncestorType=Window}, Mode=TwoWay}" AutomationProperties.Name="Tamaño de texto, de 12 a 24 puntos"/>
+  <TextBlock Text="{Binding Owner.ReadingFontSize, RelativeSource={RelativeSource AncestorType=Window}, StringFormat={}{0:0} pt}" FontSize="12"/>
+  <CheckBox x:Name="TopmostToggle" Content="Siempre encima" IsChecked="{Binding Owner.Topmost, RelativeSource={RelativeSource AncestorType=Window}, Mode=TwoWay}" Margin="0,16,0,12"/>
+  <CheckBox Content="Seguir canción" IsChecked="{Binding AutomaticUpdatesEnabled}" ToolTip="Sigue la canción y recupera letra/caché. No consulta IA."/>
+  <TextBlock Text="{Binding AutomaticMessage}" FontSize="12" Margin="0,8,0,8"/>
+  <Button Content="Actualizar letra" Command="{Binding RetryAutomaticCommand}" HorizontalAlignment="Left"/>
+  <TextBlock Text="{Binding Owner.PreferenceMessage, RelativeSource={RelativeSource AncestorType=Window}}" Style="{StaticResource OptionalText}" Margin="0,12,0,0"/>
+  <Expander Header="Contenido guardado" Margin="0,20,0,0"><StackPanel>
+   <TextBlock Text="Caché local: letras manuales o seleccionadas y análisis. Caduca a los 30 días; conserva hasta 200 canciones por uso reciente. Las ausencias caducan en una hora. No es una copia de seguridad permanente." FontSize="12" Margin="0,8,0,8"/>
+   <Button Content="Eliminar contenido guardado de esta canción" Click="DeleteSong" IsEnabled="{Binding CanDeleteSong}" Margin="0,0,0,8"/>
+   <Button Content="Eliminar toda la caché" Click="DeleteAll" IsEnabled="{Binding CanDeleteCache}"/>
+   <TextBlock Text="{Binding CacheMessage}" FontSize="12" Margin="0,8,0,0"/>
+  </StackPanel></Expander>
+  <Button Content="Ver diagnóstico" Click="Diagnostic" HorizontalAlignment="Left" Margin="0,16,0,8"/>
+  <Button Content="Reintentar almacenamiento" Command="{Binding RetryStorageCommand}" HorizontalAlignment="Left" Margin="0,0,0,8"/>
+  <Button Content="Recuperar base local" Click="Recover" IsEnabled="{Binding CanRecoverStorage}" HorizontalAlignment="Left" Margin="0,0,0,8"/>
+  <TextBlock Text="Al cerrar la ventana" FontWeight="SemiBold" Margin="0,16,0,8"/>
+  <CheckBox Content="Mantener en bandeja al cerrar" IsChecked="{Binding Owner.KeepInTray, RelativeSource={RelativeSource AncestorType=Window}, Mode=TwoWay}"/>
+  <TextBlock Text="Marcado: X y Alt+F4 ocultan la ventana y mantienen el seguimiento. Abre de nuevo con el icono de bandeja; su menú permite Salir. Desmarcado: X y Alt+F4 terminan la aplicación. Salir siempre cancela las operaciones; una solicitud ya enviada puede haber consumido tokens." FontSize="12" Margin="0,8,0,12"/>
+  <Button Content="Salir de Song Sense" Click="Exit" HorizontalAlignment="Left"/>
+ </StackPanel></ScrollViewer>
+</Window>

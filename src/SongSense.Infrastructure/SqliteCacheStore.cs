@@ -65,10 +65,19 @@ public sealed class SqliteCacheStore(string databasePath, TimeProvider? timeProv
     {
         await using var connection = Connection(); await connection.OpenAsync(token);
         using var transaction = connection.BeginTransaction(deferred: false);
-        using var command = connection.CreateCommand(); command.Transaction = transaction; command.CommandText = "SELECT json FROM insight_cache WHERE cache_key=$key;";
+        using var command = connection.CreateCommand(); command.Transaction = transaction; command.CommandText = "SELECT i.json,p.mode,p.model,p.created_at FROM insight_cache i LEFT JOIN insight_provenance p ON p.cache_key=i.cache_key WHERE i.cache_key=$key;";
         command.Parameters.AddWithValue("$key", CacheIdentity.Analysis(lyrics, model, version, scope, targetLanguage));
-        var json = await command.ExecuteScalarAsync(token) as string;
-        var insight = json is null ? null : InsightValidation.Parse(lyrics.TrackRevision, lyrics.Text, json, targetLanguage) with { Model = model, PromptVersion = version };
+        string? json = null; AnalysisProvenance? provenance = null;
+        using (var reader = await command.ExecuteReaderAsync(token))
+        {
+            if (await reader.ReadAsync(token))
+            {
+                json = reader.GetString(0);
+                if (!reader.IsDBNull(1) && Enum.IsDefined(typeof(AiConnectionMode), reader.GetInt32(1)) && reader.GetString(2) == model && reader.GetInt64(3) > 0 && reader.GetInt64(3) <= DateTimeOffset.MaxValue.UtcTicks)
+                    provenance = new((AiConnectionMode)reader.GetInt32(1), model, new DateTimeOffset(reader.GetInt64(3), TimeSpan.Zero));
+            }
+        }
+        var insight = json is null ? null : InsightValidation.Parse(lyrics.TrackRevision, lyrics.Text, json, targetLanguage) with { Model = model, PromptVersion = version, Provenance = provenance };
         if (insight is not null && track is not null)
         {
             Validate(track, lyrics);
@@ -94,7 +103,15 @@ public sealed class SqliteCacheStore(string databasePath, TimeProvider? timeProv
             INSERT INTO insight_cache VALUES ($key,$json,$created) ON CONFLICT(cache_key) DO UPDATE SET json=$json,created_at=$created;
             INSERT OR IGNORE INTO song_insights VALUES ($signature,$key);
             """, ("$key", key), ("$json", json), ("$created", Now), ("$signature", CacheIdentity.Song(track)));
-        write.ExecuteNonQuery(); Cleanup(connection, transaction);
+        write.ExecuteNonQuery();
+        using (var remove = Command(connection, transaction, "DELETE FROM insight_provenance WHERE cache_key=$key;", ("$key", key))) remove.ExecuteNonQuery();
+        if (insight.Provenance is { } provenance)
+        {
+            if (!Enum.IsDefined(provenance.Mode) || provenance.Model != model || provenance.CreatedAt.UtcTicks <= 0) throw new InvalidOperationException("Procedencia incompatible.");
+            using var source = Command(connection, transaction, "INSERT INTO insight_provenance VALUES ($key,$mode,$model,$created);", ("$key", key), ("$mode", (int)provenance.Mode), ("$model", model), ("$created", provenance.CreatedAt.UtcTicks));
+            source.ExecuteNonQuery();
+        }
+        Cleanup(connection, transaction);
         token.ThrowIfCancellationRequested(); transaction.Commit();
     }
     public async Task DeleteSongAsync(CurrentTrack track, CancellationToken token = default) => await DeleteAsync(CacheIdentity.Song(track), token);

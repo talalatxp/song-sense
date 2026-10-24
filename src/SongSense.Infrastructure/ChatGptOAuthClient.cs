@@ -228,6 +228,8 @@ public sealed class ChatGptOAuthClient(HttpClient http)
                 .Select(x => new ChatGptModel(RequiredString(x, "slug", 120), RequiredString(x, "display_name", 200)))
                 .Where(x => AiSettingsRules.IsValidModel(x.Slug) && !x.DisplayName.Any(char.IsControl)).DistinctBy(x => x.Slug).ToArray();
         }
+        catch (Exception error) when (error is JsonException or KeyNotFoundException or InvalidOperationException or ArgumentException)
+        { throw new AiException(AiFailure.InvalidResponse) { AuthenticationStep = AuthenticationStep.ModelCatalog }; }
         finally { request.Headers.Authorization = null; }
     }
 
@@ -261,14 +263,14 @@ public sealed class ChatGptOAuthClient(HttpClient http)
                             using var error = JsonDocument.Parse(bytes);
                             if (error.RootElement.TryGetProperty("error", out var code) && code.ValueKind == JsonValueKind.String &&
                                 code.GetString() is "invalid_grant" or "invalid_refresh_token" or "token_expired" or "refresh_token_expired" or "refresh_token_invalidated" or "refresh_token_reused")
-                                throw new AiException(AiFailure.SessionExpired);
+                                throw new AiException(AiFailure.SessionExpired) { HttpStatus = (int)response.StatusCode, AuthenticationStep = AuthenticationStep.TokenExchange, OAuthCode = code.GetString() == "invalid_grant" ? OAuthFailureCode.InvalidGrant : OAuthFailureCode.Other };
                         }
                         catch (JsonException) { }
                     }
                     bool rejected = response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden || authentication && response.StatusCode == HttpStatusCode.BadRequest;
                     throw new AiException(rejected ? AiFailure.Authentication : AiFailure.HttpError)
                     {
-                        AuthenticationStep = request.RequestUri?.AbsolutePath == "/api/accounts/oauth/token" ? AuthenticationStep.TokenExchange : AuthenticationStep.IdentityMetadata,
+                        AuthenticationStep = request.RequestUri?.AbsolutePath == "/api/accounts/oauth/token" ? AuthenticationStep.TokenExchange : request.RequestUri?.AbsolutePath == "/v1/models" ? AuthenticationStep.ModelCatalog : AuthenticationStep.IdentityMetadata,
                         HttpStatus = (int)response.StatusCode, OAuthCode = ReadFailureCode(bytes)
                     };
                 }

@@ -1,0 +1,19 @@
+Componentes de terceros
+
+La entrega portable incluye .NET y Windows Desktop Runtime, SQLite y los paquetes
+resueltos por NuGet. release-manifest.json identifica las versiones incluidas.
+Licenses/PACKAGE-NOTICES.txt conserva identificador, versión, licencia declarada,
+autores y avisos de copyright extraídos de los metadatos de cada paquete.
+
+Licenses conserva también los archivos LICENSE, NOTICE y THIRD-PARTY-NOTICES
+suministrados en la raíz de cada paquete, incluidos los runtimes. Se incluye
+el texto de Apache License 2.0 para las dependencias que declaran esa licencia:
+https://www.apache.org/licenses/LICENSE-2.0.txt
+
+SQLite declara su código principal como dominio público:
+https://www.sqlite.org/copyright.html
+Sus envoltorios y paquetes NuGet mantienen sus propias licencias.
+
+Estos avisos no otorgan derechos sobre letras obtenidas de servicios externos
+ni cambian la licencia del código propio de Song Sense. La entrega no incluye
+un catálogo de letras ni las letras originales usadas en pruebas.

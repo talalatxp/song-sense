@@ -1,0 +1,24 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+ <!-- Dynamic system colors also follow a change between Windows contrast themes. -->
+ <SolidColorBrush x:Key="Canvas" Color="{DynamicResource {x:Static SystemColors.WindowColorKey}}" />
+ <SolidColorBrush x:Key="Surface" Color="{DynamicResource {x:Static SystemColors.WindowColorKey}}" />
+ <SolidColorBrush x:Key="Raised" Color="{DynamicResource {x:Static SystemColors.ControlColorKey}}" />
+ <SolidColorBrush x:Key="Outline" Color="{DynamicResource {x:Static SystemColors.WindowTextColorKey}}" />
+ <SolidColorBrush x:Key="ControlBorder" Color="{DynamicResource {x:Static SystemColors.WindowTextColorKey}}" />
+ <SolidColorBrush x:Key="Gold" Color="{DynamicResource {x:Static SystemColors.WindowTextColorKey}}" />
+ <SolidColorBrush x:Key="OnAccent" Color="{DynamicResource {x:Static SystemColors.WindowColorKey}}" />
+ <SolidColorBrush x:Key="Ink" Color="{DynamicResource {x:Static SystemColors.WindowTextColorKey}}" />
+ <SolidColorBrush x:Key="Muted" Color="{DynamicResource {x:Static SystemColors.WindowTextColorKey}}" />
+ <SolidColorBrush x:Key="HoverSurface" Color="{DynamicResource {x:Static SystemColors.HighlightColorKey}}" />
+ <SolidColorBrush x:Key="PressedSurface" Color="{DynamicResource {x:Static SystemColors.HighlightColorKey}}" />
+ <SolidColorBrush x:Key="SelectionSurface" Color="{DynamicResource {x:Static SystemColors.HighlightColorKey}}" />
+ <SolidColorBrush x:Key="SelectionInk" Color="{DynamicResource {x:Static SystemColors.HighlightTextColorKey}}" />
+ <SolidColorBrush x:Key="Focus" Color="{DynamicResource {x:Static SystemColors.WindowTextColorKey}}" />
+ <SolidColorBrush x:Key="DisabledText" Color="{DynamicResource {x:Static SystemColors.GrayTextColorKey}}" />
+ <SolidColorBrush x:Key="DisabledSurface" Color="{DynamicResource {x:Static SystemColors.ControlColorKey}}" />
+ <SolidColorBrush x:Key="Information" Color="{DynamicResource {x:Static SystemColors.WindowTextColorKey}}" />
+ <SolidColorBrush x:Key="Success" Color="{DynamicResource {x:Static SystemColors.WindowTextColorKey}}" />
+ <SolidColorBrush x:Key="Warning" Color="{DynamicResource {x:Static SystemColors.WindowTextColorKey}}" />
+ <SolidColorBrush x:Key="Error" Color="{DynamicResource {x:Static SystemColors.WindowTextColorKey}}" />
+ <SolidColorBrush x:Key="Progress" Color="{DynamicResource {x:Static SystemColors.WindowTextColorKey}}" />
+</ResourceDictionary>
