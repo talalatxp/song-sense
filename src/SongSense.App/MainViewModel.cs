@@ -48,7 +48,8 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
     private DateOnly LocalDate => DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
     private int TodayRequests => usageDate == LocalDate ? usedRequests : 0;
     private bool HasQuota => TodayRequests < aiSettings.DailyRequestLimit;
-    public SongInsight? Insight { get; private set; }
+    private SongInsight? insight;
+    public SongInsight? Insight { get => insight; private set { insight = value; if (value is not null) ObserveSourceLanguage(value); } }
     public bool HasInsight => Insight is not null;
     public string InsightMessage => insightMessage;
     public string TranslationMessage => Insight?.Language == targetLanguage ? $"La letra ya está en {OutputLanguages.Get(targetLanguage).Name.ToLowerInvariant()}" :
@@ -403,6 +404,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
     }
     private void NotifyInsight()
     {
+        foreach (var name in new[] { nameof(ReadingContextHint), nameof(ShowPreparationNotice), nameof(PreparationNoticeDetails), nameof(PreparationSummary) }) OnChanged(name);
         OnChanged(nameof(LanguageNoticeKind));
         NotifyProvenance();
         OnChanged(nameof(ReadingBlocks));

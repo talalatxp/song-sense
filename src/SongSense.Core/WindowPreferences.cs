@@ -2,7 +2,7 @@ namespace SongSense.Core;
 
 public sealed record WindowPreferences(int Version = 1, double? Left = null, double? Top = null,
     double Width = 860, double Height = 780, int Tab = 0, double TextSize = 16, bool AlwaysOnTop = false,
-    bool KeepInTray = true, bool TrayHintShown = false);
+    bool KeepInTray = true, bool TrayHintShown = false, int ReadingMode = 2);
 public sealed record WorkArea(double Left, double Top, double Width, double Height);
 public static class WindowPlacement
 {
@@ -12,6 +12,7 @@ public static class WindowPlacement
         Top = value.Top is { } top && double.IsFinite(top) ? top : null,
         Width = double.IsFinite(value.Width) ? Math.Clamp(value.Width, 360, 4096) : 860,
         Height = double.IsFinite(value.Height) ? Math.Clamp(value.Height, 480, 4096) : 780,
+        ReadingMode = value.ReadingMode is >= 0 and <= 2 ? value.ReadingMode : 2,
         Tab = value.Tab is 0 or 1 ? value.Tab : 0,
         TextSize = double.IsFinite(value.TextSize) ? Math.Clamp(value.TextSize, 12, 24) : 16
     };

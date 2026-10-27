@@ -23,10 +23,7 @@ public partial class MainWindow : Window
     private void OpenSongDetails(object sender, RoutedEventArgs args)
     {
         if (songDetailsWindow is not null) { songDetailsWindow.Activate(); return; }
-        var text = new System.Windows.Controls.TextBox { IsReadOnly = true, TextWrapping = TextWrapping.Wrap, AcceptsReturn = true, Margin = new Thickness(20), VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto };
-        text.SetBinding(System.Windows.Controls.TextBox.TextProperty, new System.Windows.Data.Binding(nameof(MainViewModel.SongDetails)) { Mode = System.Windows.Data.BindingMode.OneWay });
-        System.Windows.Automation.AutomationProperties.SetName(text, "Detalles de la canción mostrada");
-        songDetailsWindow = new Window { Owner = this, DataContext = DataContext, Title = "Detalles de la canción · Song Sense", Width = 480, Height = 400, MinWidth = 360, MinHeight = 320, Content = text, WindowStartupLocation = WindowStartupLocation.CenterOwner };
+        songDetailsWindow = new Window { Owner = this, DataContext = DataContext, Title = "Detalles de la canción · Song Sense", Width = 480, Height = 400, MinWidth = 360, MinHeight = 320, Content = AuxiliaryContent.Create(DataContext!, nameof(MainViewModel.SongDetails), "Detalles de la canción", "Canción, letra y análisis guardado."), WindowStartupLocation = WindowStartupLocation.CenterOwner };
         songDetailsWindow.SourceInitialized += (_, _) => { if (songDetailsWindow is not null) WindowAppearance.Apply(songDetailsWindow); };
         songDetailsWindow.Closed += (_, _) => songDetailsWindow = null; songDetailsWindow.Show();
     }
@@ -107,15 +104,8 @@ public partial class MainWindow : Window
     private void OpenDiagnostic(MainViewModel vm)
     {
         if (diagnosticWindow is not null) { diagnosticWindow.Activate(); return; }
-        var text = new System.Windows.Controls.TextBox
-        {
-            IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap,
-            VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto, Margin = new Thickness(20)
-        };
-        text.SetBinding(System.Windows.Controls.TextBox.TextProperty, new System.Windows.Data.Binding(nameof(vm.DiagnosticDetails)) { Mode = System.Windows.Data.BindingMode.OneWay });
-        System.Windows.Automation.AutomationProperties.SetName(text, "Diagnóstico y requisitos de preparación");
         diagnosticWindow = new Window { Owner = this, DataContext = vm, Title = "Diagnóstico · Song Sense", Width = 600, Height = 480,
-            MinWidth = 360, MinHeight = 320, WindowStartupLocation = WindowStartupLocation.CenterOwner, Content = text };
+            MinWidth = 360, MinHeight = 320, WindowStartupLocation = WindowStartupLocation.CenterOwner, Content = AuxiliaryContent.Create(vm, nameof(MainViewModel.DiagnosticDetails), "Diagnóstico", vm.Preparation.Message, true, "Preparation.Message") };
         diagnosticWindow.SourceInitialized += (_, _) => { if (diagnosticWindow is not null) WindowAppearance.Apply(diagnosticWindow); };
         diagnosticWindow.Closed += (_, _) => diagnosticWindow = null;
         diagnosticWindow.Show();
@@ -126,10 +116,11 @@ public partial class MainWindow : Window
     {
         if (ReadingTabs is null) return;
         var compact = ActualWidth < 600;
+        if (IsCompactLayout != compact) ReadingActions.IsExpanded = !compact;
         IsCompactLayout = compact;
         BrandText.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         UsageBadge.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-        RootGrid.Margin = new Thickness(compact ? 8 : 12);
+        MainOuterScroll.Margin = new Thickness(compact ? 4 : 12);
     }
     private void OpenSongMenu(object sender, RoutedEventArgs args)
     {

@@ -146,6 +146,17 @@ public sealed class PreparationTests
         Assert.Equal(PreparationCause.AiWait, ai.Cause); Assert.False(ai.CanGenerate);
     }
     [Fact]
+    public async Task ReadyReadingDoesNotRepeatSuccessButBlockedRegenerationStillExplainsWhy()
+    {
+        var provider = new Provider(); var vm = await Create(provider);
+        Assert.False(vm.ShowPreparationNotice); Assert.NotEqual(vm.DisplayNotice, vm.ReadingContextHint);
+        await vm.GenerateInsightAsync(); Assert.False(vm.ShowPreparationNotice);
+        vm.ApplyAiSettings(new(false, "fixture-model", 3));
+        Assert.True(vm.ShowPreparationNotice); Assert.Contains("Puedes leer", vm.PreparationSummary);
+        Assert.Contains("desactivada", vm.PreparationNoticeDetails); Assert.Equal(1, provider.Calls);
+        await vm.StopAsync();
+    }
+    [Fact]
     public async Task SessionEventsRefreshPresentationWithoutInference()
     {
         var session = new Session { Mode = AiConnectionMode.ChatGptIncluded, Readiness = AnalysisSessionState.PendingRegistration, CanGenerate = false };

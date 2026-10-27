@@ -35,6 +35,27 @@ public sealed class OutputLanguageTests : IDisposable
         var store = new SqliteSettingsStore(Database); await store.InitializeAsync(); await store.SaveSettingsAsync(new(true, "test-model")); return store;
     }
 
+    [Fact]
+    public async Task IdentifiedSourceSurvivesAllDestinationsAndCancellationButNotEditing()
+    {
+        var provider = new Provider(); var vm = new MainViewModel(await Store(),provider,insightProvider:provider);
+        await vm.InitializeAsync(); vm.ApplyDetection(new(ApplicationState.Playing,Track,null));vm.SaveManual(vm.BeginLyricsEdit()!,Lyrics.Text);
+        Assert.Null(vm.IdentifiedSourceLanguage); await vm.GenerateInsightAsync(); Assert.Equal("es",vm.IdentifiedSourceLanguage);
+        foreach(var target in OutputLanguages.All) { vm.TargetLanguage=target.Code;await vm.WaitForCacheAsync();Assert.Equal("es",vm.IdentifiedSourceLanguage); }
+        var pending=new TaskCompletionSource<SongInsight>(TaskCreationOptions.RunContinuationsAsynchronously);provider.Generate=_=>pending.Task;
+        var task=vm.GenerateInsightAsync();vm.CancelInsight();pending.SetResult(Result(vm.TargetLanguage));await task;
+        Assert.Equal("es",vm.IdentifiedSourceLanguage);vm.SaveManual(vm.BeginLyricsEdit()!,Lyrics.Text+" editada");Assert.Null(vm.IdentifiedSourceLanguage);
+        vm.SaveManual(vm.BeginLyricsEdit()!,Lyrics.Text);Assert.Null(vm.IdentifiedSourceLanguage);await vm.StopAsync();
+    }
+    [Fact]
+    public async Task ConflictingSourceObservationsStayUnknownForTheSameOriginal()
+    {
+        var provider=new Provider();var vm=new MainViewModel(await Store(),provider,insightProvider:provider);
+        await vm.InitializeAsync();vm.ApplyDetection(new(ApplicationState.Playing,Track,null));vm.SaveManual(vm.BeginLyricsEdit()!,Lyrics.Text);
+        await vm.GenerateInsightAsync();Assert.Equal("es",vm.IdentifiedSourceLanguage);
+        vm.TargetLanguage="en";await vm.WaitForCacheAsync();provider.Generate=t=>Task.FromResult(Result(t) with {Language="mixed"});await vm.GenerateInsightAsync();
+        Assert.Equal("unknown",vm.IdentifiedSourceLanguage);vm.TargetLanguage="fr";await vm.WaitForCacheAsync();Assert.Equal("unknown",vm.IdentifiedSourceLanguage);await vm.StopAsync();
+    }
     [Theory]
     [InlineData("es")][InlineData("en")][InlineData("fr")][InlineData("de")][InlineData("it")][InlineData("pt")]
     public async Task BothProvidersSendOneSharedLanguageWithoutChangingBillingMode(string target)

@@ -11,6 +11,7 @@ public sealed partial class AiSettingsViewModel
     private int draftKeyLength;
     private bool modeSubscribed;
     public bool ApiSelected => analysisSession?.Mode != AiConnectionMode.ChatGptIncluded;
+    public string NoticeSummary => FirstInvalidField is not null ? "Corrige los campos indicados y guarda de nuevo." : Message;
     private void ModeChanged(object? sender, EventArgs args) => NotifyForm();
     public bool HasChanges => initialized && (draftKeyLength > 0 || enabled != saved.AiEnabled || model != (saved.Model ?? "") || limitText != saved.DailyRequestLimit.ToString(CultureInfo.InvariantCulture) || accepted != savedAcceptance);
     public string ChangeStatus => HasChanges ? "Cambios sin guardar" : "Sin cambios pendientes";
@@ -36,6 +37,7 @@ public sealed partial class AiSettingsViewModel
             PropertyChanged?.Invoke(this, new(nameof(Message))); PropertyChanged?.Invoke(this, new(nameof(MessageKind)));
         }
         foreach (var name in new[] { nameof(AiEnabled), nameof(Model), nameof(Limit), nameof(NoticeAccepted), nameof(HasChanges), nameof(ChangeStatus), nameof(CanTest), nameof(TestReason), nameof(EffectiveConfiguration), nameof(ModelError), nameof(LimitError), nameof(KeyError), nameof(NoticeError), nameof(FirstInvalidField) }) PropertyChanged?.Invoke(this, new(name));
+        PropertyChanged?.Invoke(this, new(nameof(NoticeSummary)));
     }
     private void ClearErrors() { ModelError = LimitError = KeyError = NoticeError = ""; FirstInvalidField = null; }
     private bool ValidateForm(SecureString key)

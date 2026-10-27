@@ -95,7 +95,8 @@ public static class Preview
                     var document = (ReadingDocument)main.FindName(tab == 0 ? "TranslationScroll" : "MeaningScroll");
                     var text = new TextRange(document.Document.ContentStart, document.Document.ContentEnd).Text;
                     Check(!text.Contains("Usa la acción principal"), "Generic instruction survived");
-                    if (!vm.HasInsight) Check(text.Contains(vm.Preparation.Message), "Empty state must follow preparation");
+                    if (!vm.HasInsight && (tab == 1 || !vm.HasPreparedLyrics)) Check(text.Contains(vm.ReadingContextHint), "Empty state must complement preparation");
+                    if (tab == 0 && vm.HasPreparedLyrics && !vm.PreparedLyrics!.IsInstrumental) Check(text.Contains(vm.ReadingBlocks[0].Original), "Prepared original must remain readable");
                     await Capture(main, $"{scenario}-{size.Item1}-{tab}", document);
                 }
             }

@@ -119,6 +119,42 @@ public sealed class ControlThemeTests
         Assert.Equal("Error: Otro mensaje", notice.DisplayText);
     });
     [Fact]
+    public void LongButtonWrapsWithoutLosingNativeNameOrInvoke() => Sta(() =>
+    {
+        var button = new Button { Content = "Eliminar contenido de esta canción", Width = 180, HorizontalContentAlignment = HorizontalAlignment.Left };
+        var window = Host(button); window.UpdateLayout();
+        var peer = new ButtonAutomationPeer(button);
+        Assert.Equal("Eliminar contenido de esta canción", peer.GetName());
+        Assert.IsAssignableFrom<IInvokeProvider>(peer.GetPattern(PatternInterface.Invoke));
+        var text = Assert.Single(Descendants(button).OfType<AccessText>());
+        Assert.Equal(TextWrapping.Wrap, text.TextWrapping);
+        Assert.True(text.ActualHeight > button.FontSize * 1.5);
+    });
+    [Fact]
+    public void NoticeKeepsFullAccessibleMessageAndExpandableDetail() => Sta(() =>
+    {
+        var notice = new StatusNotice { Message = "No se pudo guardar por un error local. Tu borrador se conserva y puedes reintentar.", Summary = "El guardado falló. Conservas el borrador; reintenta.", IsCompact = true };
+        Host(notice); Assert.True(notice.HasDetails);
+        Assert.Contains(notice.Message, UIElementAutomationPeer.CreatePeerForElement(notice)!.GetName());
+        var text = (TextBlock)notice.Template.FindName("NoticeText", notice);
+        Assert.Equal(TextWrapping.Wrap, text.TextWrapping); Assert.Equal(TextTrimming.None, text.TextTrimming);
+        var detail = (Expander)notice.Template.FindName("NoticeDetail", notice);
+        Assert.Equal(Visibility.Visible, detail.Visibility);
+        Assert.IsAssignableFrom<IExpandCollapseProvider>(new ExpanderAutomationPeer(detail).GetPattern(PatternInterface.ExpandCollapse));
+        detail.IsExpanded = true; notice.UpdateLayout();
+        Assert.Contains(Descendants(detail).OfType<TextBox>(), box => box.IsReadOnly && box.Text == notice.Message);
+    });
+    [Fact]
+    public void SystemTextScaleUpdatesUiTokensAndExistingControls() => Sta(() =>
+    {
+        var resources = new ResourceDictionary(); UiTypography.Apply(resources, 1.57);
+        Assert.Equal(14 * 1.57, (double)resources["UiControlFont"], 3);
+        Assert.Equal(13 * 1.57, (double)resources["UiInstructionFont"], 3);
+        var button = new Button { Content = "Guardar" }; var window = Host(button);
+        UiTypography.Apply(window.Resources, 1.57); window.UpdateLayout();
+        Assert.Equal(14 * 1.57, button.FontSize, 3);
+    });
+    [Fact]
     public void MenuRetainsCheckmarkSubmenuArrowAndNativeExpandPattern() => Sta(() =>
     {
         var check = new MenuItem { Header = "Opción", IsCheckable = true, IsChecked = true }; Host(check);

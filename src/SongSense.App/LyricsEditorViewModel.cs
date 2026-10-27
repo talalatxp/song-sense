@@ -7,6 +7,7 @@ public sealed class LyricsEditorViewModel : INotifyPropertyChanged, IDisposable
     private readonly LyricsEditContext context;
     private string manualText, originalText, error = "";
     private CandidateOption? selected;
+    private bool manualTouched, saveAttempted, validationCorrected;
     public LyricsEditorViewModel(MainViewModel owner, LyricsEditContext context)
     {
         this.owner = owner; this.context = context; TrackLabel = $"{owner.TrackTitle} · {owner.Artist}";
@@ -26,9 +27,14 @@ public sealed class LyricsEditorViewModel : INotifyPropertyChanged, IDisposable
     public bool HasChanges => manualText != originalText || Selected is not null;
     public bool IsValid => !string.IsNullOrWhiteSpace(ManualText) && ManualText.Length <= 20_000;
     public string Error => !IsCurrent ? "La canción o la letra ha cambiado. El borrador sigue vinculado a la canción original; puedes editarlo y copiarlo, pero no aplicarlo aquí."
-        : error.Length > 0 ? error : !IsValid && Selected is null ? ManualText.Length > 20_000 ? "Supera 20.000 caracteres. Corrige el exceso; no se recorta el texto." : "Introduce una letra que no esté vacía." : "";
+        : error;
+    public string ErrorSummary => !IsCurrent ? "Borrador anterior: puedes editarlo y copiarlo" : "No se guardó: revisa el motivo y reintenta";
+    public string ManualError => ManualText.Length > 20_000 ? "Supera 20.000 caracteres. Corrige el exceso; no se recorta el texto." : !IsValid && (manualTouched || saveAttempted) ? "Introduce una letra que no esté vacía." : "";
+    public string ManualFeedback => ManualError.Length > 0 ? ManualError : validationCorrected ? "Letra corregida: no está vacía y respeta los 20.000 caracteres." : "";
+    public string ManualAccessibilityHint => ManualError.Length > 0 ? ManualError : ManualHint;
+    public string ManualHint => !IsValid && ManualError.Length == 0 ? "Guardar requiere una letra no vacía, de hasta 20.000 caracteres." : "";
     public string SaveMessage { get; private set; } = "Borrador sin guardar · solo en esta ventana.";
-    public string ManualText { get => manualText; set { manualText = value; error = ""; Notify(); } }
+    public string ManualText { get => manualText; set { var hadError = ManualError.Length > 0; manualText = value; manualTouched = true; validationCorrected = IsValid && (hadError || validationCorrected); error = ""; Notify(); } }
     public string CharacterCount => $"{ManualText.Length:N0} / 20.000 caracteres";
     public CandidateOption? Selected { get => selected; set { selected = value; error = ""; Notify(); } }
     public string Preview => Selected is null ? "" : Selected.Candidate.IsInstrumental ? "Esta canción es instrumental" : LyricsResolution.TextOf(Selected.Candidate);
@@ -39,6 +45,7 @@ public sealed class LyricsEditorViewModel : INotifyPropertyChanged, IDisposable
     public event PropertyChangedEventHandler? PropertyChanged;
     public async Task SaveAsync(bool version = false)
     {
+        if (!version) { saveAttempted = true; Notify(); }
         if (!IsCurrent || Saving || (version ? Selected is null : !IsValid)) return;
         Saving = true; Notify();
         try
@@ -52,7 +59,7 @@ public sealed class LyricsEditorViewModel : INotifyPropertyChanged, IDisposable
     private void OwnerChanged(object? sender, PropertyChangedEventArgs args) => Notify();
     private void Notify()
     {
-        foreach (var name in new[] { nameof(CanCopyDraft), nameof(VersionsMessage), nameof(ManualText), nameof(CharacterCount), nameof(Selected), nameof(Preview), nameof(PreviewStanza), nameof(IsCurrent), nameof(Saving), nameof(CanEditDraft), nameof(HasChanges), nameof(IsValid), nameof(Error), nameof(SaveMessage) }) PropertyChanged?.Invoke(this, new(name));
+        foreach (var name in new[] { nameof(ErrorSummary), nameof(ManualFeedback), nameof(ManualAccessibilityHint), nameof(ManualError), nameof(ManualHint), nameof(CanCopyDraft), nameof(VersionsMessage), nameof(ManualText), nameof(CharacterCount), nameof(Selected), nameof(Preview), nameof(PreviewStanza), nameof(IsCurrent), nameof(Saving), nameof(CanEditDraft), nameof(HasChanges), nameof(IsValid), nameof(Error), nameof(SaveMessage) }) PropertyChanged?.Invoke(this, new(name));
         ConfirmCommand.Refresh(); SaveCommand.Refresh();
     }
     public void Dispose() => owner.PropertyChanged -= OwnerChanged;

@@ -133,7 +133,7 @@ public sealed class LyricsViewModelTests
         editor.ManualText = new string('a', 20_001);
         editor.SaveCommand.Execute(null);
         Assert.Equal(20_001, editor.ManualText.Length);
-        Assert.Contains("20.000", editor.Error);
+        Assert.Contains("20.000", editor.ManualError);
         Assert.Null(vm.PreparedLyrics);
         editor.ManualText = new string('a', 20_000);
         var revision = vm.LyricsRevision;

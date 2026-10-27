@@ -9,7 +9,7 @@ public sealed partial class MainViewModel
     private DateTimeOffset? lyricsRetryAt, aiRetryAt;
     private bool lyricsCancelled, aiCancelled, counterFailed;
     private DateOnly? aiFailureDate;
-    public string SongDetails => $"{TrackTitle}\n{Artist}\nÁlbum: {Album}\n{Duration}\nVersión: " + (PreparedLyrics is null ? "Sin confirmar" : PreparedLyrics.Origin == LyricsOrigin.Manual ? "Edición manual" : Candidates.FirstOrDefault(c => c.Id == PreparedLyrics.LrclibId)?.Title ?? "Letra de LRCLIB confirmada") + $"\n{ReadingSource}\n{AnalysisDetails}\n{CacheMessage}";
+    public string SongDetails => $"CANCIÓN\n{TrackTitle}\n{Artist}\nÁlbum: {Album}\n{Duration}\n\nLETRA\nVersión: " + (PreparedLyrics is null ? "Sin confirmar" : PreparedLyrics.Origin == LyricsOrigin.Manual ? "Edición manual" : Candidates.FirstOrDefault(c => c.Id == PreparedLyrics.LrclibId)?.Title ?? "Letra de LRCLIB confirmada") + $"\n{ReadingSource}\n\nANÁLISIS\n{AnalysisDetails}\n{CacheMessage}";
     public PreparationDescriptor Preparation => PreparationRules.Evaluate(new()
     {
         StorageError = StorageError, Initializing = initializing, CanRecover = CanRecoverStorage,
@@ -34,6 +34,28 @@ public sealed partial class MainViewModel
     public string DisplayStatus => Preparation.Status;
     public string DisplayNotice => Preparation.Message;
     public string ReadingHint => Preparation.Message;
+    public string ReadingContextHint => Preparation.Content switch
+    {
+        ContentReadiness.NoTrack => "El título de la canción y su letra aparecerán aquí.",
+        ContentReadiness.Instrumental => "Esta versión no tiene texto para leer.",
+        ContentReadiness.NoLyrics or ContentReadiness.Versions => "Aquí aparecerá la letra que encuentres o confirmes.",
+        ContentReadiness.Lyrics => "La letra original está disponible para leer.", _ => ""
+    };
+    public bool ShowPreparationNotice => Preparation.Cause is not (PreparationCause.Ready or PreparationCause.Result) || Preparation.Kind != NoticeKind.Success || Preparation.Blockers.Count > 0;
+    public string PreparationNoticeDetails => ShowDiagnostic || Preparation.Cause == PreparationCause.Result && Preparation.Blockers.Count > 0 ? DiagnosticDetails : Preparation.Message;
+    public string PreparationSummary => Preparation.Cause switch
+    {
+        PreparationCause.Storage => "No se pudo abrir el almacenamiento. Reintenta o revisa el diagnóstico.",
+        PreparationCause.NoSpotify => Preparation.Message,
+        PreparationCause.NoTrack => AutomaticUpdatesEnabled ? "No hay canción identificable. Elige una en Spotify." : "No hay canción mostrada. Reanuda el seguimiento.",
+        PreparationCause.LyricsOffline => "Sin conexión al servicio de letras. Comprueba la red y reintenta.",
+        PreparationCause.DailyLimit => "Límite local agotado. Puedes leer; consulta el detalle para volver a generar.",
+        PreparationCause.Result => "Puedes leer el resultado. Revisa el detalle antes de regenerar.",
+        PreparationCause.ModelMissing => "Falta un modelo válido. Elígelo en los ajustes de IA.",
+        PreparationCause.PlanPaused or PreparationCause.ApiDisabled => "Consultas pausadas. Revisa la habilitación de IA.",
+        PreparationCause.AiFailed => "La consulta de IA falló. Conservas la letra; revisa el detalle antes de reintentar.",
+        _ => Preparation.Message
+    };
     // Current decision, independent of the provenance and usage of an earlier result.
     public string AiDecisionLabel => connection is null && string.IsNullOrEmpty(EffectiveModel)
         ? "IA sin configurar"
@@ -65,7 +87,7 @@ public sealed partial class MainViewModel
     };
     public string PrimaryActionLabel => Preparation.ActionLabel;
     public bool ShowDiagnostic => Preparation.Action != PreparationAction.Diagnostic &&
-        (Preparation.Blockers.Count > 0 || Preparation.Cause is not (PreparationCause.Ready or PreparationCause.Result));
+        (Preparation.Kind == NoticeKind.Error || HasPreparedLyrics && Preparation.Blockers.Count > 0);
     public string DiagnosticDetails => string.Join("\n\n", new[]
     {
         Preparation.Message, string.Join("\n", Preparation.Blockers.Where(b => b.Message != Preparation.Message).Select(b => "• " + b.Message)),

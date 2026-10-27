@@ -25,6 +25,22 @@ public sealed class MeaningPresentationTests
     private static void Click(Hyperlink link) => link.RaiseEvent(new RoutedEventArgs(Hyperlink.ClickEvent));
 
     [Theory]
+    [InlineData(120,12)] [InlineData(220,24)] [InlineData(500,20)]
+    public void PreviewUsesAtMostThirtyFivePercentOfViewport(double viewport,double points) => Sta(() =>
+    {
+        var font=points*4/3;var text=string.Join(" ",Enumerable.Repeat("Una interpretación completa y conservada.",100));
+        var preview=MeaningPresentation.PreviewSummary(text,280,font,viewport*.35);
+        if(preview.Length==0) return;
+        var measure=new TextBlock {Text=preview,FontFamily=new("Georgia"),FontSize=font,TextWrapping=TextWrapping.Wrap,LineHeight=font*1.5,LineStackingStrategy=LineStackingStrategy.BlockLineHeight};
+        measure.Measure(new Size(280,double.PositiveInfinity));Assert.True(measure.DesiredSize.Height<=viewport*.35+.1);
+    });
+    [Fact]
+    public void DiagnosticCopyRemovesCredentialsAndAccountIdentifiers()
+    {
+        var result=AuxiliaryContent.Sanitize("HTTP401 Bearer abc-secret sk-fake-key person@example.invalid");
+        Assert.DoesNotContain("abc-secret",result);Assert.DoesNotContain("sk-fake-key",result);Assert.DoesNotContain("person@",result);Assert.Contains("HTTP401",result);
+    }
+    [Theory]
     [InlineData(12)] [InlineData(16)] [InlineData(20)] [InlineData(24)]
     public void LongPreviewFitsSixLinesAndKeepsWholeGraphemes(double points) => Sta(() =>
     {

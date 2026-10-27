@@ -52,8 +52,7 @@ public partial class ConnectionWindow : Window
     private void ReviewModel(object sender, RoutedEventArgs args) => viewModel.Review(2);
     private void OpenDiagnostic(object sender, RoutedEventArgs args)
     {
-        var text = new System.Windows.Controls.TextBox { Text = viewModel.DiagnosticDetails, IsReadOnly = true, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto, Margin = new Thickness(16) };
-        var dialog = new Window { Owner = this, Title = "Diagnóstico de conexión", Width = 460, Height = 360, MinWidth = 360, Content = text, WindowStartupLocation = WindowStartupLocation.CenterOwner };
+        var dialog = new Window { Owner = this, Title = "Diagnóstico de conexión", Width = 460, Height = 360, MinWidth = 360, MinHeight = 320, Content = AuxiliaryContent.Create(viewModel, nameof(ConnectionViewModel.DiagnosticDetails), "Diagnóstico de conexión", viewModel.PrimaryReason, true, nameof(ConnectionViewModel.PrimaryReason)), WindowStartupLocation = WindowStartupLocation.CenterOwner };
         dialog.SourceInitialized += (_, _) => WindowAppearance.Apply(dialog); dialog.Show();
     }
 }

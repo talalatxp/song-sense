@@ -1,6 +1,9 @@
 namespace SongSense.Core;
 
-public sealed record OutputLanguage(string Code, string Name);
+public sealed record OutputLanguage(string Code, string Name)
+{
+    public override string ToString() => Name;
+}
 public static class OutputLanguages
 {
     public const string Default = "es";

@@ -7,7 +7,7 @@ using System.Windows.Input;
 namespace SongSense.App;
 
 /// <summary>A single native selection surface and scroll owner for each reading tab.</summary>
-public sealed class ReadingDocument : RichTextBox
+public sealed partial class ReadingDocument : RichTextBox
 {
     public event EventHandler? TypographyChanged;
     public ReadingDocument()
@@ -25,8 +25,9 @@ public sealed class ReadingDocument : RichTextBox
         SetResourceReference(ForegroundProperty, "Ink");
         SetResourceReference(SelectionBrushProperty, "Gold");
         Document.PagePadding = new Thickness(4);
-        SizeChanged += (_, _) => ApplyTypography();
-        AddHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler((_, e) => { if (e.ViewportWidthChange != 0) ApplyTypography(); }));
+        InitializeNavigation();
+        SizeChanged += (_, _) => PreserveReadingPosition(ApplyTypographyCore, false);
+        AddHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler((_, e) => { if (e.ViewportWidthChange != 0) PreserveReadingPosition(ApplyTypographyCore, false); }));
         var menu = new ContextMenu();
         menu.Items.Add(new MenuItem { Header = "Copiar", Command = ApplicationCommands.Copy });
         ContextMenu = menu;
@@ -34,11 +35,11 @@ public sealed class ReadingDocument : RichTextBox
 
     public void SetPointSize(double points)
     {
-        FontSize = Math.Clamp(points, 12, 24) * 4 / 3;
-        ApplyTypography();
+        PreserveReadingPosition(() => { FontSize = Math.Clamp(points, 12, 24) * 4 / 3; ApplyTypographyCore(); });
     }
 
-    public void ApplyTypography()
+    public void ApplyTypography() => PreserveReadingPosition(ApplyTypographyCore);
+    private void ApplyTypographyCore()
     {
         Document.FontSize = FontSize;
         Document.FontFamily = new FontFamily("Georgia");

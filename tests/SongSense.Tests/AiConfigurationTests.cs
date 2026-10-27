@@ -469,7 +469,9 @@ public sealed class AiConfigurationTests : IDisposable
         var (service, _, handler) = await SetupAsync(); await EnableAsync(service);
         using var vm = new AiSettingsViewModel(service, CancellationToken.None); await vm.InitializeAsync();
         vm.Limit = "0"; using var empty = new SecureString(); await vm.SaveAsync(empty); Assert.NotEmpty(vm.LimitError);
+        string? summary = null; vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(vm.NoticeSummary)) summary = vm.NoticeSummary; };
         vm.Limit = "20"; Assert.Empty(vm.LimitError); Assert.Null(vm.FirstInvalidField); Assert.False(vm.HasChanges);
+        Assert.Equal(vm.Message, summary);
         Assert.Equal(NoticeKind.Information, vm.MessageKind); Assert.True(vm.CanTest); Assert.Equal(0, handler.Calls);
     }
     private sealed class FormSession : IAnalysisSession
@@ -483,6 +485,36 @@ public sealed class AiConfigurationTests : IDisposable
     {
         public int Calls { get; private set; }
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token) { Calls++; return send(request, token); }
+    }
+    [Fact]
+    public async Task EditingAndLocalValidationNeverStartApiActivity()
+    {
+        var (service, _, handler) = await SetupAsync(); await EnableAsync(service);
+        using var vm = new AiSettingsViewModel(service, CancellationToken.None); await vm.InitializeAsync();
+        var activity = new List<bool>(); vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(vm.IsOperating)) activity.Add(vm.IsOperating); };
+        vm.Model = "has spaces"; vm.Limit = "101";
+        using var empty = new SecureString(); await vm.SaveAsync(empty);
+        Assert.Equal("Model", vm.FirstInvalidField); Assert.False(vm.IsOperating); Assert.Equal(ApiSettingsOperation.None, vm.Operation);
+        vm.Model = "fixture-model"; vm.Limit = "20";
+        Assert.DoesNotContain(true, activity); Assert.Equal(0, handler.Calls); Assert.False(vm.IsOperating);
+    }
+    [Theory]
+    [InlineData("success")] [InlineData("cancel")] [InlineData("failure")]
+    public async Task ProbeActivityEndsAfterSuccessCancellationOrFailure(string outcome)
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var response = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (service, store, handler) = await SetupAsync((_, token) => { started.SetResult(); return response.Task.WaitAsync(token); });
+        await EnableAsync(service); using var vm = new AiSettingsViewModel(service, CancellationToken.None); await vm.InitializeAsync();
+        var pending = vm.TestAsync(); await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(vm.IsOperating); Assert.Equal(ApiSettingsOperation.Testing, vm.Operation);
+        Assert.Contains("solicitud de pago", vm.OperationMessage); Assert.False(vm.CanManage); Assert.True(vm.CanCancel);
+        if (outcome == "cancel") vm.Cancel();
+        else response.SetResult(outcome == "success" ? Response() : Response(HttpStatusCode.InternalServerError, "{}"));
+        await pending;
+        Assert.False(vm.IsOperating); Assert.False(vm.CanCancel); Assert.Equal(ApiSettingsOperation.None, vm.Operation); Assert.Empty(vm.OperationMessage);
+        Assert.Equal(outcome == "success" ? NoticeKind.Success : outcome == "cancel" ? NoticeKind.Warning : NoticeKind.Error, vm.MessageKind);
+        Assert.Equal(1, handler.Calls); Assert.Equal(1, await store.ReadRequestCountAsync(service.LocalDate));
     }
     [Fact]
     public async Task FailedKeyRemovalStillRefreshesDisabledApiWithoutClaimingDeletion()

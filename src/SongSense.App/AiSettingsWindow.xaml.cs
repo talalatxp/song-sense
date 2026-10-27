@@ -58,9 +58,17 @@ public partial class AiSettingsWindow : Window
     private void FocusInvalidField(object? sender, EventArgs args)
     {
         FrameworkElement target = viewModel.FirstInvalidField switch { "Model" => ModelInput, "Limit" => LimitInput, "Notice" => NoticeInput, _ => KeyInput };
-        target.BringIntoView(); target.Focus();
-        var error = viewModel.FirstInvalidField switch { "Model" => ModelErrorText, "Limit" => LimitErrorText, "Notice" => NoticeErrorText, _ => KeyErrorText };
-        error.BringIntoView();
+        FrameworkElement group = viewModel.FirstInvalidField switch { "Model" => ModelValidationGroup, "Limit" => LimitValidationGroup, "Notice" => NoticeValidationGroup, _ => KeyValidationGroup };
+        Dispatcher.InvokeAsync(() =>
+        {
+            if (closed || !IsLoaded) return;
+            target.Focus();
+            // Validate against the updated layout, then frame label, field and error
+            // together. A tall error keeps its beginning visible; full text is also
+            // exposed through the input's accessible help text.
+            FormScroll.UpdateLayout();
+            group.BringIntoView(new Rect(0, 0, group.ActualWidth, Math.Min(group.ActualHeight, FormScroll.ViewportHeight)));
+        }, System.Windows.Threading.DispatcherPriority.Loaded);
     }
     private void OpenModelDocumentation(object sender, RoutedEventArgs args)
     { try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://developers.openai.com/api/docs/models") { UseShellExecute = true }); } catch { MessageBox.Show(this, "No se pudo abrir el navegador. Consulta la documentación de modelos de OpenAI.", "Ayuda del modelo"); } }

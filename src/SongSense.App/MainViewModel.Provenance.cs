@@ -3,6 +3,16 @@ namespace SongSense.App;
 public enum ContentSaveState { SessionOnly, Pending, Saved, Failed }
 public sealed partial class MainViewModel
 {
+    private string? identifiedFingerprint, identifiedLanguage;
+    private string? LyricsFingerprint => PreparedLyrics is not { } lyrics ? null : Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"{CurrentTrack?.Revision}|{LyricsRevision}|{lyrics.Origin}|{lyrics.LrclibId}|{lyrics.Text}")));
+    public string? IdentifiedSourceLanguage => identifiedFingerprint == LyricsFingerprint ? identifiedLanguage : null;
+    private void ObserveSourceLanguage(SongInsight result)
+    {
+        var fingerprint = LyricsFingerprint;
+        if (fingerprint is null) return;
+        if (identifiedFingerprint != fingerprint) { identifiedFingerprint = fingerprint; identifiedLanguage = result.Language; }
+        else if (identifiedLanguage != result.Language) identifiedLanguage = "unknown";
+    }
     private ContentSaveState lyricsSaveState, insightSaveState;
     public ContentSaveState LyricsSaveState => lyricsSaveState;
     public ContentSaveState InsightSaveState => insightSaveState;
@@ -22,6 +32,6 @@ public sealed partial class MainViewModel
     private static string LanguageLabel(string language) => language == "mixed" ? "Mixto" : OutputLanguages.All.FirstOrDefault(l => l.Code == language)?.Name ?? language;
     private void NotifyProvenance()
     {
-        OnChanged(nameof(LyricsSaveState)); OnChanged(nameof(InsightSaveState)); OnChanged(nameof(ReadingSource)); OnChanged(nameof(AnalysisDetails)); OnChanged(nameof(SongDetails));
+        OnChanged(nameof(IdentifiedSourceLanguage)); OnChanged(nameof(LyricsSaveState)); OnChanged(nameof(InsightSaveState)); OnChanged(nameof(ReadingSource)); OnChanged(nameof(AnalysisDetails)); OnChanged(nameof(SongDetails));
     }
 }

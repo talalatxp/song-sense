@@ -4,6 +4,7 @@ namespace SongSense.App;
 public sealed class StatusAnnouncements
 {
     private string? last;
+    public void Reset() => last = null;
     public bool Observe(NoticeKind kind, string text, string scope = "")
     {
         if (kind == NoticeKind.Progress) { last = null; return false; }

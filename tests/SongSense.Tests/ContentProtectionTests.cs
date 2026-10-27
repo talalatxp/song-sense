@@ -11,6 +11,28 @@ public sealed class ContentProtectionTests
         var vm = new MainViewModel(new Store(), new Provider(), cache: cache); await vm.InitializeAsync(); vm.ApplyDetection(Track(1)); await vm.WaitForCacheAsync(); return vm;
     }
     [Fact]
+    public async Task ValidationFeedbackChangesByStateRatherThanEveryCharacter()
+    {
+        var vm=await Start(new());using var editor=new LyricsEditorViewModel(vm,vm.BeginLyricsEdit()!);
+        Assert.Empty(editor.ManualFeedback);editor.ManualText=new string('x',20001);var excess=editor.ManualFeedback;
+        Assert.Contains("20.000",excess);Assert.Equal(excess,editor.ManualAccessibilityHint);
+        editor.ManualText+="x";Assert.Equal(excess,editor.ManualFeedback);Assert.Equal(20002,editor.ManualText.Length);
+        editor.ManualText="Letra corregida";var corrected=editor.ManualFeedback;Assert.Contains("corregida",corrected);
+        editor.ManualText+=" y ampliada";Assert.Equal(corrected,editor.ManualFeedback);
+        editor.ManualText=" ";Assert.Contains("vacía",editor.ManualFeedback);Assert.NotEqual(corrected,editor.ManualFeedback);
+        await vm.StopAsync();
+    }
+    [Fact]
+    public async Task EmptyEditorStartsNeutralAndValidationRemainsManualOnly()
+    {
+        var vm = await Start(new()); using var editor = new LyricsEditorViewModel(vm, vm.BeginLyricsEdit()!);
+        Assert.Empty(editor.Error); Assert.Empty(editor.ManualError); Assert.NotEmpty(editor.ManualHint);
+        Assert.False(editor.SaveCommand.CanExecute(null)); Assert.Contains("No hay versiones",editor.VersionsMessage);
+        await editor.SaveAsync(); Assert.NotEmpty(editor.ManualError); Assert.Empty(editor.Error); Assert.Null(vm.PreparedLyrics);
+        editor.ManualText="Una letra propia"; Assert.Empty(editor.ManualError);
+        editor.ManualText=" "; Assert.NotEmpty(editor.ManualError); Assert.Empty(editor.Error); await vm.StopAsync();
+    }
+    [Fact]
     public async Task OpeningAndAbandoningDeletionNeverWritesAndStaleTargetCannotDeleteNewSong()
     {
         var cache = new Cache(); var vm = await Start(cache);
@@ -56,7 +78,7 @@ public sealed class ContentProtectionTests
         var vm = await Start(new()); using var editor = new LyricsEditorViewModel(vm, vm.BeginLyricsEdit()!);
         Assert.False(editor.SaveCommand.CanExecute(null)); editor.ManualText = "Texto válido";
         Assert.True(editor.SaveCommand.CanExecute(null)); Assert.Empty(editor.Error);
-        editor.ManualText = new string('a', 20_001); Assert.False(editor.SaveCommand.CanExecute(null)); Assert.Contains("20.000", editor.Error);
+        editor.ManualText = new string('a', 20_001); Assert.False(editor.SaveCommand.CanExecute(null)); Assert.Contains("20.000", editor.ManualError);
         editor.ManualText = new string('a', 20_000); Assert.True(editor.SaveCommand.CanExecute(null));
         await editor.SaveAsync(); Assert.Equal(20_000, vm.OriginalLyrics.Length); Assert.False(editor.HasChanges); await vm.StopAsync();
     }

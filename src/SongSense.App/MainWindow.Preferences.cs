@@ -27,6 +27,8 @@ public partial class MainWindow
         if (saved.Left is { } left && saved.Top is { } top) { WindowStartupLocation = WindowStartupLocation.Manual; Left = left; Top = top; }
         Topmost = saved.AlwaysOnTop;
         KeepInTray = saved.KeepInTray; TrayHintShown = saved.TrayHintShown;
+        preferredReadingMode = saved.ReadingMode;
+        if (readingModel is not null) TranslationScroll.PreserveReadingPosition(BuildLyricsDocument);
         ReadingFontSize = saved.TextSize; ReadingTabs.SelectedIndex = saved.Tab;
         preferenceTimer.Tick += (_, _) => { preferenceTimer.Stop(); SavePreferences(); };
         LocationChanged += (_, _) => QueuePreferences(); SizeChanged += (_, _) => QueuePreferences();
@@ -53,7 +55,7 @@ public partial class MainWindow
     private WindowPreferences CapturePreferences()
     {
         var bounds = WindowState == WindowState.Normal ? new Rect(Left, Top, ActualWidth > 0 ? ActualWidth : Width, ActualHeight > 0 ? ActualHeight : Height) : RestoreBounds;
-        return new(Left: bounds.Left, Top: bounds.Top, Width: bounds.Width, Height: bounds.Height, Tab: ReadingTabs.SelectedIndex, TextSize: ReadingFontSize, AlwaysOnTop: Topmost, KeepInTray: KeepInTray, TrayHintShown: TrayHintShown);
+        return new(Left: bounds.Left, Top: bounds.Top, Width: bounds.Width, Height: bounds.Height, Tab: ReadingTabs.SelectedIndex, TextSize: ReadingFontSize, AlwaysOnTop: Topmost, KeepInTray: KeepInTray, TrayHintShown: TrayHintShown, ReadingMode: preferredReadingMode);
     }
     private void QueuePreferences() { if (preferenceStore is null) return; preferenceTimer.Stop(); preferenceTimer.Start(); }
     public void SavePreferences()

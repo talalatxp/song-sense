@@ -18,11 +18,13 @@ public partial class App : Application
     private SingleInstance? instance;
     private DesktopTray? tray;
     private IDisposable? themeSubscription;
+    private IDisposable? typographySubscription;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
         themeSubscription = ThemeResources.FollowSystem(this);
+        typographySubscription = UiTypography.FollowSystem(this);
         instance = new SingleInstance();
         if (!instance.IsFirst) { _ = ActivateExistingAsync(); return; }
         lyricsHttp = new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false }) { Timeout = Timeout.InfiniteTimeSpan };
@@ -96,6 +98,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         themeSubscription?.Dispose();
+        typographySubscription?.Dispose();
         lifetime.Cancel();
         tray?.Dispose(); instance?.Dispose();
         lifetime.Dispose();

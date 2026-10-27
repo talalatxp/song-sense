@@ -27,6 +27,7 @@ public sealed class StatusNotice : Control
     {
         AutomationProperties.SetLiveSetting(this, AutomationLiveSetting.Polite);
         Loaded += (_, _) => QueueAnnouncement();
+        IsVisibleChanged += (_, _) => { if (IsVisible) QueueAnnouncement(); else announcements.Reset(); };
     }
     private void QueueAnnouncement()
     {
@@ -35,7 +36,7 @@ public sealed class StatusNotice : Control
         Dispatcher.BeginInvoke(() =>
         {
             announcementQueued = false;
-            if (!IsLoaded || !announcements.Observe(Kind, Message, AnnouncementScope)) return;
+            if (!IsLoaded || !IsVisible || !announcements.Observe(Kind, Message, AnnouncementScope)) return;
             var peer = UIElementAutomationPeer.FromElement(this) ?? UIElementAutomationPeer.CreatePeerForElement(this);
             if (peer is not null && AutomationPeer.ListenerExists(AutomationEvents.LiveRegionChanged))
             {
@@ -51,12 +52,18 @@ public sealed class StatusNotice : Control
     public static readonly DependencyProperty DisplayTextProperty = DisplayTextPropertyKey.DependencyProperty;
     public static readonly DependencyProperty MessageProperty = DependencyProperty.Register(nameof(Message), typeof(string), typeof(StatusNotice), new FrameworkPropertyMetadata("", UpdateText));
     public static readonly DependencyProperty KindProperty = DependencyProperty.Register(nameof(Kind), typeof(NoticeKind), typeof(StatusNotice), new FrameworkPropertyMetadata(NoticeKind.Information, UpdateText));
+    public static readonly DependencyProperty SummaryProperty = DependencyProperty.Register(nameof(Summary), typeof(string), typeof(StatusNotice), new FrameworkPropertyMetadata("", UpdateText));
+    public string Summary { get => (string)GetValue(SummaryProperty); set => SetValue(SummaryProperty, value); }
+    private static readonly DependencyPropertyKey HasDetailsPropertyKey = DependencyProperty.RegisterReadOnly(nameof(HasDetails), typeof(bool), typeof(StatusNotice), new PropertyMetadata(false));
+    public static readonly DependencyProperty HasDetailsProperty = HasDetailsPropertyKey.DependencyProperty;
+    public bool HasDetails => (bool)GetValue(HasDetailsProperty);
     public string DisplayText => (string)GetValue(DisplayTextProperty);
     private static void UpdateText(DependencyObject target, DependencyPropertyChangedEventArgs args)
     {
         var notice = (StatusNotice)target;
         var label = notice.Kind switch { NoticeKind.Success => "Listo", NoticeKind.Warning => "Atención", NoticeKind.Error => "Error", NoticeKind.Progress => "En curso", _ => "Información" };
-        notice.SetValue(DisplayTextPropertyKey, label + ": " + notice.Message);
+        notice.SetValue(DisplayTextPropertyKey, label + ": " + (string.IsNullOrWhiteSpace(notice.Summary) ? notice.Message : notice.Summary));
+        notice.SetValue(HasDetailsPropertyKey, !string.IsNullOrWhiteSpace(notice.Summary) && notice.Summary != notice.Message && notice.Message.Length > 0);
         notice.QueueAnnouncement();
     }
     public string Message { get => (string)GetValue(MessageProperty); set => SetValue(MessageProperty, value); }

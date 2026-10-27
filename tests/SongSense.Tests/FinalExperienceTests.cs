@@ -49,7 +49,7 @@ public sealed class FinalExperienceTests
     public void AboutIdentifiesPrereleaseAndBuildWithoutClaimingExternalAcceptance()
     {
         Assert.StartsWith("0.14.0-preview.1", BuildIdentity.ProductVersion);
-        Assert.Equal("0.14.0.1", BuildIdentity.FileVersion);
+        Assert.Equal("0.14.0.2", BuildIdentity.FileVersion);
         Assert.Contains("pendiente", BuildIdentity.Description);
         Assert.Contains("Build", BuildIdentity.Description);
     }

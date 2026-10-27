@@ -1,10 +1,13 @@
+using System.Collections.Concurrent;
+using System.ComponentModel;
+using Xunit.Abstractions;
 using SongSense.App;
 using SongSense.Core;
 using Xunit;
 
 namespace SongSense.Tests;
 
-public sealed class PlaybackContextTests
+public sealed class PlaybackContextTests(ITestOutputHelper output)
 {
     private static TrackDetection Observation(long revision, PlaybackState playback = PlaybackState.Playing) =>
         new(playback == PlaybackState.Paused ? ApplicationState.Paused : ApplicationState.Playing,
@@ -43,14 +46,14 @@ public sealed class PlaybackContextTests
         var provider = new Provider(); var store = new Store(); var session = new Session();
         var vm = await Create(store, provider, session); await Prepare(vm);
         var result = vm.Insight; vm.StartAutomaticUpdates(); vm.AutomaticUpdatesEnabled = false;
-        var notifications = new HashSet<string?>(); vm.PropertyChanged += (_, e) => notifications.Add(e.PropertyName);
+        var notifications = new NotificationJournal(); vm.PropertyChanged += notifications.Record;
         vm.ApplyDetection(Observation(2)); vm.ApplyDetection(Observation(3, PlaybackState.Paused));
         Assert.Equal(1, vm.CurrentTrack!.Revision); Assert.Same(result, vm.Insight);
         Assert.Equal("CANCIÓN MOSTRADA", vm.TrackContextLabel);
         Assert.Equal("Spotify en pausa · otra canción", vm.PlaybackStatus);
         Assert.Equal("Seguimiento pausado · mostrando esta canción", vm.TrackingStatus);
         Assert.Equal("Listo", vm.DisplayStatus); Assert.True(vm.ResumeTrackingCommand.CanExecute(null));
-        Assert.Contains(nameof(vm.PlaybackStatus), notifications); Assert.Contains(nameof(vm.TrackingStatus), notifications);
+        Assert.Contains(nameof(vm.PlaybackStatus), notifications.Names); Assert.Contains(nameof(vm.TrackingStatus), notifications.Names);
         vm.ResumeTrackingCommand.Execute(null); await vm.WaitForAutomaticAsync(); await vm.WaitForCacheAsync();
         Assert.Equal(3, vm.CurrentTrack!.Revision); Assert.Equal("Spotify en pausa", vm.PlaybackStatus);
         Assert.Equal("Seguimiento activo", vm.TrackingStatus); Assert.False(vm.CanResumeTracking);
@@ -58,6 +61,7 @@ public sealed class PlaybackContextTests
         Assert.Equal(1, provider.Inferences); Assert.Null(vm.Insight);
         Assert.Equal(AiConnectionMode.ChatGptIncluded, session.Mode); Assert.Equal("fixture", session.Model);
         await vm.StopAsync();
+        foreach (var entry in notifications.Snapshot) output.WriteLine(entry.ToString());
     }
 
     [Fact]
@@ -101,7 +105,51 @@ public sealed class PlaybackContextTests
         await vm.StopAsync(); Assert.False(vm.ResumeTrackingCommand.CanExecute(null));
     }
 
-    private sealed class Store : ISettingsStore, IAutomaticUpdateSettings
+    [Fact]
+    public async Task WorkerFailureAndPlaybackCommandOverlapDeterministicallyWithoutCorruptingObservation()
+    {
+        var store = new CoordinatedStore(); var vm = await Create(store, new Provider()); await Prepare(vm);
+        var journal = new NotificationJournal(); vm.PropertyChanged += journal.Record;
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var releaseObserver = new ManualResetEventSlim(); int blocked = 0;
+        PropertyChangedEventHandler hold = (_, e) =>
+        {
+            if (e.PropertyName == nameof(vm.CacheMessage) && Interlocked.CompareExchange(ref blocked, 1, 0) == 0)
+            { entered.TrySetResult(); if (!releaseObserver.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException("Command never released the worker observer"); }
+        };
+        vm.PropertyChanged += hold;
+        try
+        {
+            vm.AutomaticUpdatesEnabled = false;
+            await store.Started.Task.WaitAsync(TimeSpan.FromSeconds(10)); store.Release.TrySetResult();
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            var before = journal.Snapshot.Last();
+            vm.ApplyDetection(Observation(2));
+            var during = journal.Snapshot.Last(entry => entry.Name == nameof(vm.PlaybackStatus));
+            Assert.True(during.Sequence > before.Sequence); Assert.NotEqual(before.Thread, during.Thread);
+            Assert.Equal("Spotify reproduciendo · otra canción", vm.PlaybackStatus); Assert.Equal(1, vm.CurrentTrack!.Revision);
+        }
+        finally { releaseObserver.Set(); vm.PropertyChanged -= hold; await vm.WaitForCacheAsync(); await vm.StopAsync(); }
+        Assert.Contains(nameof(vm.CacheMessage), journal.Names); Assert.Contains(nameof(vm.PlaybackStatus), journal.Names);
+        foreach (var entry in journal.Snapshot) output.WriteLine(entry.ToString());
+    }
+    private sealed record Notification(long Sequence, int Thread, string? Name);
+    private sealed class NotificationJournal
+    {
+        private long sequence;
+        private readonly ConcurrentQueue<Notification> entries = new();
+        public Notification[] Snapshot => entries.OrderBy(entry => entry.Sequence).ToArray();
+        public string?[] Names => Snapshot.Select(entry => entry.Name).ToArray();
+        public void Record(object? sender, PropertyChangedEventArgs args) => entries.Enqueue(new(Interlocked.Increment(ref sequence), Environment.CurrentManagedThreadId, args.PropertyName));
+    }
+    private sealed class CoordinatedStore : Store
+    {
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public override async Task SaveAutomaticUpdatesAsync(bool enabled, CancellationToken t = default)
+        { Started.TrySetResult(); await Release.Task.WaitAsync(t); throw new System.IO.IOException("synthetic preference failure"); }
+    }
+    private class Store : ISettingsStore, IAutomaticUpdateSettings
     {
         public bool Enabled = true;
         public Task InitializeAsync(CancellationToken t = default) => Task.CompletedTask;
@@ -109,7 +157,7 @@ public sealed class PlaybackContextTests
         public Task SaveSettingsAsync(AppSettings settings, CancellationToken t = default) => Task.CompletedTask;
         public Task<int> ReadRequestCountAsync(DateOnly date, CancellationToken t = default) => Task.FromResult(0);
         public Task<bool> ReadAutomaticUpdatesAsync(CancellationToken t = default) => Task.FromResult(Enabled);
-        public Task SaveAutomaticUpdatesAsync(bool enabled, CancellationToken t = default) { Enabled = enabled; return Task.CompletedTask; }
+        public virtual Task SaveAutomaticUpdatesAsync(bool enabled, CancellationToken t = default) { Enabled = enabled; return Task.CompletedTask; }
     }
     private sealed class Provider : ILyricsProvider, IInsightProvider
     {

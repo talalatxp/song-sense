@@ -6,6 +6,8 @@ using SongSense.Infrastructure;
 
 namespace SongSense.App;
 
+public enum ApiSettingsOperation { None, Loading, Saving, DeletingKey, Testing }
+
 public sealed partial class AiSettingsViewModel(AiConfigurationService service, CancellationToken lifetime, AiActivityViewModel? activity = null, IAnalysisSession? analysisSession = null) : INotifyPropertyChanged, IDisposable
 {
     public AiActivityViewModel Activity { get; } = activity ?? new();
@@ -13,6 +15,16 @@ public sealed partial class AiSettingsViewModel(AiConfigurationService service, 
     private CancellationTokenSource? request;
     private Task active = Task.CompletedTask;
     private bool busy;
+    public ApiSettingsOperation Operation { get; private set; }
+    public bool IsOperating => busy;
+    public string OperationMessage => Operation switch
+    {
+        ApiSettingsOperation.Loading => "Cargando ajustes locales…",
+        ApiSettingsOperation.Saving => "Guardando ajustes en este dispositivo… No se envían solicitudes.",
+        ApiSettingsOperation.DeletingKey => "Eliminando la clave local y desactivando IA…",
+        ApiSettingsOperation.Testing => "Probando conexión: solicitud de pago en curso…",
+        _ => ""
+    };
     private bool initialized;
     private bool hasKey;
     private long keyRevision;
@@ -35,10 +47,10 @@ public sealed partial class AiSettingsViewModel(AiConfigurationService service, 
     public string Message => message;
     public event PropertyChangedEventHandler? PropertyChanged;
     public event EventHandler<AppSettings>? SettingsLoaded;
-    private void Notify() { foreach (var name in new[] { nameof(HasKey), nameof(AiEnabled), nameof(Model), nameof(Limit), nameof(NoticeAccepted), nameof(CanManage), nameof(CanCancel), nameof(KeyStatus), nameof(CountLabel), nameof(Message), nameof(MessageKind) }) PropertyChanged?.Invoke(this, new(name)); NotifyForm(); }
+    private void Notify() { foreach (var name in new[] { nameof(Operation), nameof(IsOperating), nameof(OperationMessage), nameof(HasKey), nameof(AiEnabled), nameof(Model), nameof(Limit), nameof(NoticeAccepted), nameof(CanManage), nameof(CanCancel), nameof(KeyStatus), nameof(CountLabel), nameof(Message), nameof(MessageKind) }) PropertyChanged?.Invoke(this, new(name)); NotifyForm(); }
 
-    public Task InitializeAsync() => RunAsync(async token => { if (!modeSubscribed && analysisSession is not null) { analysisSession.Changed += ModeChanged; modeSubscribed = true; } await ReloadAsync(token); initialized = true; message = "Abrir y guardar ajustes no hace solicitudes de red."; });
-    public Task SaveAsync(SecureString key) => !CanManage || !ValidateForm(key) ? Task.CompletedTask : RunAsync(async token =>
+    public Task InitializeAsync() => RunAsync(ApiSettingsOperation.Loading, async token => { if (!modeSubscribed && analysisSession is not null) { analysisSession.Changed += ModeChanged; modeSubscribed = true; } await ReloadAsync(token); initialized = true; message = "Abrir y guardar ajustes no hace solicitudes de red."; });
+    public Task SaveAsync(SecureString key) => !CanManage || !ValidateForm(key) ? Task.CompletedTask : RunAsync(ApiSettingsOperation.Saving, async token =>
     {
         if (!int.TryParse(Limit, NumberStyles.None, CultureInfo.InvariantCulture, out var limit) || limit is < 1 or > 100)
             throw new AiException(AiFailure.InvalidSettings);
@@ -46,15 +58,14 @@ public sealed partial class AiSettingsViewModel(AiConfigurationService service, 
         await ReloadAsync(token);
         message = "Ajustes guardados. No se ha enviado ninguna solicitud.";
     });
-    public Task DeleteKeyAsync() => RunAsync(async token =>
+    public Task DeleteKeyAsync() => RunAsync(ApiSettingsOperation.DeletingKey, async token =>
     {
         try { await service.DeleteKeyAsync(token); }
         finally { await ReloadAsync(token); }
         message = "Clave eliminada. IA desactivada; el contador se conserva.";
     });
-    public Task TestAsync() => !CanTest ? BlockTest() : RunAsync(async token =>
+    public Task TestAsync() => !CanTest ? BlockTest() : RunAsync(ApiSettingsOperation.Testing, async token =>
     {
-        message = "Probando conexión: solicitud de pago en curso…"; Notify();
         // Use persisted configuration, never the potentially unsaved form fields.
         var saved = await service.ReadAsync(token);
         var current = new AiUsagePresentation(AiUsageState.EnCurso, Context:
@@ -93,10 +104,11 @@ public sealed partial class AiSettingsViewModel(AiConfigurationService service, 
         CountLabel = $"Hoy ({service.LocalDate:dd/MM/yyyy}): {data.Count} / {data.Settings.DailyRequestLimit} solicitudes. Se usa la fecha local de Windows.";
         Activity.UpdateCounter(service.LocalDate, data.Count, data.Settings.DailyRequestLimit);
     }
-    private Task RunAsync(Func<CancellationToken, Task> action)
+    private Task RunAsync(ApiSettingsOperation operation, Func<CancellationToken, Task> action)
     {
         if (busy || session.IsCancellationRequested) return Task.CompletedTask;
         busy = true;
+        Operation = operation; message = OperationMessage;
         request = CancellationTokenSource.CreateLinkedTokenSource(session.Token);
         Notify();
         return active = RunCoreAsync(action, request);
@@ -104,7 +116,9 @@ public sealed partial class AiSettingsViewModel(AiConfigurationService service, 
     private async Task RunCoreAsync(Func<CancellationToken, Task> action, CancellationTokenSource current)
     {
         try { messageKind = NoticeKind.Success; await action(current.Token); }
-        catch (OperationCanceledException) { messageKind = NoticeKind.Warning; message = "Operación cancelada. Los intentos reservados no se devuelven al contador."; }
+        catch (OperationCanceledException) { messageKind = NoticeKind.Warning; message = Operation == ApiSettingsOperation.Testing
+            ? "Prueba cancelada. Una petición ya enviada puede consumir; los intentos reservados no se devuelven al contador."
+            : "Operación local cancelada. Revisa los ajustes guardados antes de continuar; no se ha enviado una solicitud de IA."; }
         catch (AiException error) { messageKind = NoticeKind.Error; message = Describe(error.Failure) + (error.Usage is { } usage ? " " + usage.Describe() : ""); }
         catch (Exception) { messageKind = NoticeKind.Error; message = Describe(AiFailure.LocalStorage); }
         finally
@@ -122,7 +136,7 @@ public sealed partial class AiSettingsViewModel(AiConfigurationService service, 
                 }
                 catch (Exception) { messageKind = NoticeKind.Error; Activity.UpdateCounter(service.LocalDate, null, 0); CountLabel = "Contador local no disponible."; message = Describe(AiFailure.LocalStorage); }
             }
-            current.Dispose(); request = null; busy = false; Notify();
+            current.Dispose(); request = null; busy = false; Operation = ApiSettingsOperation.None; Notify();
         }
     }
     public static string Describe(AiException error, bool chatGpt)

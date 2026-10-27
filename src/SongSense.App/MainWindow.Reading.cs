@@ -15,9 +15,6 @@ public partial class MainWindow
     private long readingLyricsRevision;
     private string? readingLanguage;
     private SongInsight? readingResult;
-    private readonly double[] readingOffsets = [0, 0];
-    private bool restoringReading;
-    private long readingNavigationVersion;
     private bool updatingReadingMode, restoreReadingFocus;
     private int preferredReadingMode = 2;
     private MeaningPresentation? meaningPresentation;
@@ -25,10 +22,8 @@ public partial class MainWindow
     {
         DataContextChanged += (_, _) => AttachReadingModel();
         Loaded += (_, _) => { AttachReadingModel(); RestoreReadingPosition(); };
-        Closed += (_, _) => { if (readingModel is not null) readingModel.PropertyChanged -= ReadingModelChanged; meaningPresentation?.Dispose(); readingNavigationVersion++; };
+        Closed += (_, _) => { if (readingModel is not null) readingModel.PropertyChanged -= ReadingModelChanged; meaningPresentation?.Dispose();  };
         ReadingTabs.SelectionChanged += (_, e) => { if (ReferenceEquals(e.OriginalSource, ReadingTabs)) RestoreReadingPosition(); };
-        TranslationScroll.AddHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler((_, e) => RecordReadingPosition(0, TranslationScroll, e)));
-        MeaningScroll.AddHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler((_, e) => RecordReadingPosition(1, MeaningScroll, e)));
         PreviewKeyDown += (_, e) => { if (e.Key == Key.Tab && Keyboard.Modifiers.HasFlag(ModifierKeys.Control) && (TranslationScroll.IsKeyboardFocusWithin || MeaningScroll.IsKeyboardFocusWithin)) restoreReadingFocus = true; };
     }
     private void AttachReadingModel()
@@ -50,34 +45,20 @@ public partial class MainWindow
         if (readingTrack == vm.CurrentTrack?.Revision && readingLyricsRevision == vm.LyricsRevision && readingLanguage == vm.TargetLanguage && ReferenceEquals(readingResult, vm.Insight)) return;
         readingTrack = vm.CurrentTrack?.Revision; readingLyricsRevision = vm.LyricsRevision; readingLanguage = vm.TargetLanguage; readingResult = vm.Insight;
         BuildReadingDocuments();
-        readingOffsets[0] = readingOffsets[1] = 0; RestoreReadingPosition();
-    }
-    private void RecordReadingPosition(int tab, ReadingDocument scroll, ScrollChangedEventArgs e)
-    {
-        if (!restoringReading && scroll.IsLoaded && ReadingTabs.SelectedIndex == tab && e.ExtentHeightChange == 0 && e.ViewportHeightChange == 0)
-            readingOffsets[tab] = scroll.VerticalOffset;
+        TranslationScroll.ResetReadingPosition(); MeaningScroll.ResetReadingPosition();
     }
     private void RestoreReadingPosition()
     {
-        var tab = ReadingTabs.SelectedIndex == 1 ? 1 : 0;
-        var version = ++readingNavigationVersion; restoringReading = true;
-        Dispatcher.BeginInvoke(() =>
-        {
-            if (version != readingNavigationVersion) return;
-            if (restoreReadingFocus) { (tab == 1 ? MeaningScroll : TranslationScroll).Focus(); restoreReadingFocus = false; }
-            (tab == 1 ? MeaningScroll : TranslationScroll).ScrollToVerticalOffset(readingOffsets[tab]);
-            Dispatcher.BeginInvoke(() => { if (version == readingNavigationVersion) restoringReading = false; }, DispatcherPriority.ContextIdle);
-        }, DispatcherPriority.ContextIdle);
+        TranslationScroll.RestoreBookmark(); MeaningScroll.RestoreBookmark();
+        if (restoreReadingFocus) { (ReadingTabs.SelectedIndex == 1 ? MeaningScroll : TranslationScroll).Focus(); restoreReadingFocus = false; }
     }
-
+    public int PreferredReadingMode => preferredReadingMode;
     private void ChangeReadingMode(object sender, SelectionChangedEventArgs e)
     {
         if (updatingReadingMode || readingModel is null || !ReferenceEquals(e.OriginalSource, ReadingMode)) return;
-        preferredReadingMode = Math.Max(0, ReadingMode.SelectedIndex);
-        var offset = TranslationScroll.VerticalOffset;
-        BuildLyricsDocument();
-        readingOffsets[0] = offset;
-        RestoreReadingPosition();
+        preferredReadingMode = Math.Clamp(ReadingMode.SelectedIndex, 0, 2);
+        TranslationScroll.PreserveReadingPosition(BuildLyricsDocument);
+        QueuePreferences();
     }
     private static string SourceLabel(string? code) => code switch
     {
@@ -88,28 +69,15 @@ public partial class MainWindow
     private Paragraph AddText(ReadingDocument view, string text, bool label = false)
     {
         var paragraph = new Paragraph(new Run(text));
-        if (label) { paragraph.FontFamily = new System.Windows.Media.FontFamily("Segoe UI"); paragraph.FontSize = 12; paragraph.LineHeight = 18; paragraph.SetResourceReference(ForegroundProperty, "Muted"); }
+        if (label) { paragraph.Tag = "metadata"; paragraph.FontFamily = new System.Windows.Media.FontFamily("Segoe UI"); paragraph.FontSize = 12; paragraph.LineHeight = 18; paragraph.SetResourceReference(ForegroundProperty, "Muted"); }
         view.Document.Blocks.Add(paragraph);
         return paragraph;
     }
     private void AddHeader(ReadingDocument view)
     {
         if (readingModel is not { } vm) return;
-        foreach (var property in new[] { nameof(MainViewModel.ReadingSource), nameof(MainViewModel.LanguageMessage) })
-        {
-            var paragraph = new Paragraph(new Run()) { Tag = "metadata", FontFamily = new System.Windows.Media.FontFamily("Segoe UI") };
-            var binding = new Binding(property) { Source = vm, Mode = BindingMode.OneWay };
-            BindingOperations.SetBinding(paragraph.Inlines.FirstInline!, Run.TextProperty, binding);
-            paragraph.SetResourceReference(ForegroundProperty, "Muted");
-            var headerStyle = new Style(typeof(Paragraph));
-            headerStyle.Setters.Add(new Setter(TextElement.FontSizeProperty, 12d));
-            headerStyle.Setters.Add(new Setter(Block.LineHeightProperty, 18d));
-            var empty = new DataTrigger { Binding = binding, Value = "" };
-            empty.Setters.Add(new Setter(TextElement.FontSizeProperty, .1d));
-            empty.Setters.Add(new Setter(Block.LineHeightProperty, .1d));
-            headerStyle.Triggers.Add(empty); paragraph.Style = headerStyle;
-            view.Document.Blocks.Add(paragraph);
-        }
+        if (vm.HasPreparedLyrics) AddSource(view, vm);
+        if (!vm.RetryLanguageCommand.CanExecute(null)) return;
         var retry = new Hyperlink { Command = vm.RetryLanguageCommand };
         AutomationProperties.SetName(retry, "Reintentar guardado del idioma");
         var retryText = new Run(); retry.Inlines.Add(retryText);
@@ -144,35 +112,47 @@ public partial class MainWindow
     private void BuildLyricsDocument()
     {
         if (readingModel is not { } vm) return;
-        TranslationScroll.Document.Blocks.Clear(); AddHeader(TranslationScroll);
+        TranslationScroll.Document.Blocks.Clear();
         var translated = vm.ReadingBlocks.Any(b => b.HasTranslation);
         updatingReadingMode = true;
         for (var i = 1; i < 3; i++) ((ComboBoxItem)ReadingMode.Items[i]).IsEnabled = translated;
         ReadingMode.SelectedIndex = translated ? preferredReadingMode : 0;
         updatingReadingMode = false;
-        if (!translated && vm.Insight is { } insight && insight.Language == insight.TargetLanguage)
-            AddText(TranslationScroll, "El original ya está en el idioma de destino; se muestra una sola vez.", true);
-        if (!vm.HasInsight) AddReadingHint(TranslationScroll);
+        var identity = ReadingMode.SelectedIndex switch {
+            1 => $"Traducción · {OutputLanguages.Get(vm.TargetLanguage).Name}",
+            2 => $"Original · {SourceLabel(vm.IdentifiedSourceLanguage)} / Traducción · {OutputLanguages.Get(vm.TargetLanguage).Name}",
+            _ => $"Original · {SourceLabel(vm.IdentifiedSourceLanguage)}" };
+        AddText(TranslationScroll, identity, true).Tag = "metadata";
+        var stanza = 0;
         foreach (var block in vm.ReadingBlocks)
         {
             if (ReadingMode.SelectedIndex != 1)
             {
-                AddText(TranslationScroll, $"Original · {SourceLabel(vm.Insight?.Language)}", true);
-                AddText(TranslationScroll, block.Original);
+                var original = AddText(TranslationScroll, block.Original); original.Tag = "lyrics-body"; ReadingAnchors.SetKey(original, "lyrics:original:" + stanza);
             }
             if (ReadingMode.SelectedIndex != 0 && block.HasTranslation)
             {
-                AddText(TranslationScroll, $"Traducción · {OutputLanguages.Get(vm.TargetLanguage).Name}", true);
-                AddText(TranslationScroll, block.Translation);
+                var target = AddText(TranslationScroll, block.Translation); target.Tag = "lyrics-body"; ReadingAnchors.SetKey(target, "lyrics:translation:" + stanza);
+                if (ReadingMode.SelectedIndex == 2) { target.BorderThickness = new Thickness(2, 0, 0, 0); target.Padding = new Thickness(8, 0, 0, 0); target.SetResourceReference(Block.BorderBrushProperty, "Gold"); }
             }
+            stanza++;
         }
+        if (!translated && vm.Insight is { } insight && insight.Language == insight.TargetLanguage)
+            AddText(TranslationScroll, "El original ya está en el idioma de destino; se muestra una sola vez.", true).Tag = "metadata";
+        if (!vm.HasPreparedLyrics) AddReadingHint(TranslationScroll);
+        if (vm.HasPreparedLyrics) AddSource(TranslationScroll, vm);
         TranslationScroll.Selection.Select(TranslationScroll.Document.ContentStart, TranslationScroll.Document.ContentStart);
         UpdateReadingTypography();
+    }
+    private void AddSource(ReadingDocument view, MainViewModel vm)
+    {
+        var paragraph = AddText(view, "", true);
+        BindingOperations.SetBinding(paragraph.Inlines.FirstInline!, Run.TextProperty, new Binding(nameof(MainViewModel.ReadingSource)) { Source = vm, Mode = BindingMode.OneWay });
     }
     private void AddReadingHint(ReadingDocument view)
     {
         var paragraph = AddText(view, "", true);
-        BindingOperations.SetBinding(paragraph.Inlines.FirstInline!, Run.TextProperty, new Binding(nameof(MainViewModel.ReadingHint)) { Source = readingModel, Mode = BindingMode.OneWay });
+        BindingOperations.SetBinding(paragraph.Inlines.FirstInline!, Run.TextProperty, new Binding(nameof(MainViewModel.ReadingContextHint)) { Source = readingModel, Mode = BindingMode.OneWay });
     }
     private void UpdateReadingTypography()
     {
