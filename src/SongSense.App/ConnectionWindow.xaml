@@ -4,10 +4,19 @@
   <TextBlock DockPanel.Dock="Top" Text="Cuenta y consumo" FontFamily="Georgia" FontSize="{DynamicResource UiHeading24}" Foreground="{DynamicResource Gold}" Margin="0,0,0,8"/>
   <StackPanel DockPanel.Dock="Top">   <TextBlock Text="{Binding StepTitle}" FontSize="{DynamicResource UiHeading18}" FontWeight="SemiBold" Margin="0,4,0,4" Foreground="{DynamicResource Gold}"/>
    <TextBlock Text="{Binding SessionSummary}" FontSize="{DynamicResource UiInstructionFont}"/>
+   <StackPanel x:Name="ConnectStep" Visibility="{Binding IsConnectStep, Converter={StaticResource BoolVis}}">
+    <TextBlock Text="{Binding PendingAccountMessage}" FontSize="{DynamicResource UiInstructionFont}" Margin="0,4,0,4"/>
+   </StackPanel>
+   <StackPanel x:Name="ModelStep" Visibility="{Binding IsModelStep, Converter={StaticResource BoolVis}}">
+    <TextBlock x:Name="CatalogResult" Text="{Binding ModelMessage}" FontSize="{DynamicResource UiInstructionFont}" AutomationProperties.LiveSetting="Polite" Margin="0,4,0,4"/>
+    <ComboBox x:Name="ModelSelection" Visibility="{Binding HasModels, Converter={StaticResource BoolVis}}" ItemsSource="{Binding Models}" DisplayMemberPath="DisplayName" SelectedValuePath="Slug" SelectedValue="{Binding SelectedModel}" IsEnabled="{Binding CanSelectModel}" AutomationProperties.Name="Modelo autorizado por ChatGPT" Margin="0,4,0,4"/>
+   </StackPanel>
    <StackPanel x:Name="ConfirmStep" Visibility="{Binding IsConfirmStep, Converter={StaticResource BoolVis}}">
 
-    <TextBlock Text="Comprueba en ChatGPT → Uso que Song Sense no puede usar créditos. La app no verifica ese ajuste. Confírmalo para esta sesión; habilitar no genera análisis."/>
+    <TextBlock x:Name="CreditsWarning" Text="La app no verifica el ajuste de créditos ni garantiza cargos cero. Revisa Uso en ChatGPT antes de habilitar."/>
+    <Button x:Name="ManageUsageButton" Content="Gestionar uso en ChatGPT" Click="ManageUsage" HorizontalAlignment="Left" Padding="8,5" Margin="0,4,0,4"/>
     <CheckBox x:Name="CreditsConfirmation" IsChecked="{Binding CreditsDisabledConfirmed, UpdateSourceTrigger=PropertyChanged}"><TextBlock Text="He desactivado el uso de créditos para esta cuenta y Song Sense" TextWrapping="Wrap"/></CheckBox>
+    <Button x:Name="ConfirmEnableButton" Content="{Binding PrimaryLabel}" Click="NextStep" IsEnabled="{Binding CanPrimary}" Style="{StaticResource PrimaryButton}" Padding="8,5" Margin="0,4,0,4" HorizontalAlignment="Left"/>
 
    </StackPanel>
 </StackPanel>
@@ -16,28 +25,15 @@
     <TextBlock Text="{Binding OperationTitle}" FontSize="{DynamicResource UiInstructionFont}"/>
     <ProgressBar IsIndeterminate="True" Height="4" Margin="0,4,0,6" AutomationProperties.Name="{Binding OperationTitle}"/>
    </StackPanel>
-   <TextBlock Text="{Binding PrimaryReason}" FontSize="{DynamicResource UiInstructionFont}" Margin="0,0,0,4"/>
-   <WrapPanel><Button x:Name="NextButton" Content="{Binding PrimaryLabel}" Click="NextStep" IsEnabled="{Binding CanPrimary}" Style="{StaticResource PrimaryButton}" FontSize="{DynamicResource UiControlFont}" Padding="8,6" Margin="0,0,6,4"/><Button Content="Cancelar" Click="CancelOperation" IsEnabled="{Binding CanCancel}" Visibility="{Binding CanCancel, Converter={StaticResource BoolVis}}" FontSize="{DynamicResource UiControlFont}" Padding="8,6" Margin="0,0,6,4"/><Button Content="Diagnóstico" Click="OpenDiagnostic" FontSize="{DynamicResource UiControlFont}" Padding="6,4" Margin="0,0,0,4"/></WrapPanel>
+   <TextBlock Text="{Binding PrimaryReason}" FontSize="{DynamicResource UiInstructionFont}" Margin="0,0,0,4"><TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}"><Style.Triggers><DataTrigger Binding="{Binding IsConfirmStep}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding IsModelStep}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+   <WrapPanel><Button x:Name="NextButton" Content="{Binding PrimaryLabel}" Click="NextStep" IsEnabled="{Binding CanPrimary}" FontSize="{DynamicResource UiControlFont}" Padding="8,6" Margin="0,0,6,4"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}"><Style.Triggers><DataTrigger Binding="{Binding IsConfirmStep}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Button.Style></Button><Button Content="Cancelar" Click="CancelOperation" IsEnabled="{Binding CanCancel}" Visibility="{Binding CanCancel, Converter={StaticResource BoolVis}}" FontSize="{DynamicResource UiControlFont}" Padding="8,6" Margin="0,0,6,4"/></WrapPanel>
    <ui:StatusNotice Visibility="{Binding ShowOperationResult, Converter={StaticResource BoolVis}}" Message="{Binding Message}" Kind="{Binding MessageKind}" IsCompact="False" FontSize="{DynamicResource UiInstructionFont}"/>
   </StackPanel></ScrollViewer>
   <ScrollViewer x:Name="StepsScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel Margin="0,0,8,0" IsEnabled="{Binding CanManage}">
-   <Expander Header="Cambiar modo de IA" Margin="0,0,0,8"><StackPanel>
+   <Expander x:Name="ConfigurationGroup" Header="Configuración" Margin="0,0,0,8"><StackPanel>
    <RadioButton Content="Mi plan de ChatGPT" IsChecked="{Binding IsChatGptMode, Mode=OneWay}" Click="UseChatGpt" GroupName="AiMode" Margin="0,8,0,6"/>
    <RadioButton Content="API de pago · facturación independiente" IsChecked="{Binding IsApiMode, Mode=OneWay}" Click="UseApiKey" GroupName="AiMode" Margin="0,0,0,8"/>
-   </StackPanel></Expander><Expander Header="Modo y condiciones"><TextBlock Text="{Binding ModeDescription}" FontSize="{DynamicResource UiInstructionFont}" Foreground="{DynamicResource Muted}"/></Expander>
-   <Expander Header="Cambiar cuenta o modelo" Margin="0,4,0,4"><WrapPanel><Button Content="Revisar cuenta" Click="ReviewAccount" Style="{StaticResource QuietButton}" FontSize="{DynamicResource UiControlFont}"/><Button Content="Cambiar modelo" Click="ReviewModel" IsEnabled="{Binding CanLoadModels}" Style="{StaticResource QuietButton}" FontSize="{DynamicResource UiControlFont}" Margin="6,0,0,0"/></WrapPanel></Expander>
-   <StackPanel x:Name="ConnectStep" Visibility="{Binding IsConnectStep, Converter={StaticResource BoolVis}}">
-    <TextBlock Text="Accede en tu navegador con la cuenta que quieras utilizar y concede el permiso de uso del plan. La app no importa contraseñas ni conversaciones. Tus credenciales se protegen en este dispositivo."/>
-    <TextBlock Text="{Binding PendingAccountMessage}" FontSize="{DynamicResource UiInstructionFont}" Foreground="{DynamicResource Muted}" Margin="0,8,0,0"/>
-   </StackPanel>
-   <StackPanel x:Name="ModelStep" Visibility="{Binding IsModelStep, Converter={StaticResource BoolVis}}">
-    <TextBlock Text="{Binding ModelMessage}" FontSize="{DynamicResource UiInstructionFont}" AutomationProperties.LiveSetting="Polite"/>
-    <ComboBox x:Name="ModelSelection" Visibility="{Binding HasModels, Converter={StaticResource BoolVis}}" ItemsSource="{Binding Models}" DisplayMemberPath="DisplayName" SelectedValuePath="Slug" SelectedValue="{Binding SelectedModel}" IsEnabled="{Binding CanSelectModel}" AutomationProperties.Name="Modelo autorizado por ChatGPT" Margin="0,8,0,0"/>
-   </StackPanel>
-<StackPanel Visibility="{Binding IsConfirmStep, Converter={StaticResource BoolVis}}">    <Button Content="Gestionar uso en ChatGPT" Click="ManageUsage" HorizontalAlignment="Left" Margin="0,8,0,8"/>
-    <Expander Header="Sobre esta confirmación" Margin="0,4,0,8"><TextBlock Text="Tu confirmación no garantiza por sí sola cargos cero. Comprueba que corresponde a la cuenta de arriba. Se solicita de nuevo al reiniciar. Si cambias el permiso en ChatGPT, pausa aquí las consultas. La app no cambia automáticamente a API de pago." FontSize="{DynamicResource UiInstructionFont}"/></Expander>
-   </StackPanel>
-   <TextBlock Text="Vuelve a la ventana principal para traducir y explicar cuando tú lo decidas." Visibility="{Binding IsReadyStep, Converter={StaticResource BoolVis}}"/>
+   <WrapPanel><Button Content="Revisar cuenta" Click="ReviewAccount" Style="{StaticResource QuietButton}" FontSize="{DynamicResource UiControlFont}"/><Button Content="Cambiar modelo" Click="ReviewModel" IsEnabled="{Binding CanLoadModels}" Style="{StaticResource QuietButton}" FontSize="{DynamicResource UiControlFont}" Margin="6,0,0,0"/></WrapPanel>
    <Expander Header="Avanzado · cuentas y reparación" Margin="0,16,0,12"><StackPanel>
     <StackPanel Visibility="{Binding ShowAccountSelector, Converter={StaticResource BoolVis}}"><ComboBox ItemsSource="{Binding Accounts}" DisplayMemberPath="Label" SelectedValuePath="ClientId" SelectedValue="{Binding SelectedClientId}" AutomationProperties.Name="Cuentas ChatGPT"/><Button Content="Usar cuenta seleccionada" Click="SelectAccount" IsEnabled="{Binding CanSelectAccount}" HorizontalAlignment="Left"/></StackPanel>
     <Button Content="Añadir otra cuenta" Click="AddAccount" IsEnabled="{Binding CanAddAccount}" HorizontalAlignment="Left"/>
@@ -47,7 +43,15 @@
     <Button Content="Desconectar cuenta" Click="Disconnect" IsEnabled="{Binding CanDisconnect}" HorizontalAlignment="Left"/>
     <TextBlock Text="La confirmación de créditos no se recupera como una aceptación permanente. El modo API se elige explícitamente; nunca actúa como alternativa automática." FontSize="{DynamicResource UiInstructionFont}" Margin="0,8,0,0"/>
    </StackPanel></Expander>
-   <Expander Header="Actividad y consumo"><StackPanel><TextBlock Text="{Binding Activity.LastActivity}" FontSize="{DynamicResource UiInstructionFont}"/><TextBlock Text="{Binding Activity.Counter}" FontSize="{DynamicResource UiInstructionFont}"/><TextBlock Text="Los tokens no indican un porcentaje del plan. El uso externo se consulta en ChatGPT; los límites pueden compartirse con otras aplicaciones." FontSize="{DynamicResource UiInstructionFont}"/><Button Content="Gestionar uso en ChatGPT" Click="ManageUsage" HorizontalAlignment="Left"/></StackPanel></Expander>
+   </StackPanel></Expander>
+   <Expander x:Name="ActivityHelpGroup" Header="Actividad y ayuda"><StackPanel>
+    <TextBlock Text="{Binding Activity.LastActivity}" FontSize="{DynamicResource UiInstructionFont}"/>
+    <TextBlock Text="{Binding Activity.Counter}" FontSize="{DynamicResource UiInstructionFont}"/>
+    <TextBlock Text="{Binding ModeDescription}" FontSize="{DynamicResource UiInstructionFont}"/>
+    <TextBlock Text="La confirmación se solicita al reiniciar. Si cambias el permiso en ChatGPT, pausa las consultas aquí. La app no pasa automáticamente a API de pago. Los tokens no indican un porcentaje del plan; los límites pueden compartirse con otras aplicaciones." FontSize="{DynamicResource UiInstructionFont}"/>
+    <Button Content="Gestionar uso en ChatGPT" Click="ManageUsage" HorizontalAlignment="Left"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Style.Triggers><DataTrigger Binding="{Binding IsConfirmStep}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
+    <Button Content="Diagnóstico" Click="OpenDiagnostic" HorizontalAlignment="Left"/>
+   </StackPanel></Expander>
   </StackPanel></ScrollViewer>
  </DockPanel></ScrollViewer>
 </Window>

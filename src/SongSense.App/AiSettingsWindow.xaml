@@ -3,7 +3,7 @@
  <Window.Resources><BooleanToVisibilityConverter x:Key="BoolVis"/></Window.Resources>
  <DockPanel Margin="16">
   <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8"><TextBlock Text="API de pago" FontFamily="Georgia" FontSize="{DynamicResource UiHeading24}" Foreground="{DynamicResource Gold}"/><TextBlock Text="{Binding ChangeStatus}" FontSize="{DynamicResource UiInstructionFont}" AutomationProperties.LiveSetting="Polite"/></StackPanel>
-  <ScrollViewer DockPanel.Dock="Bottom" MaxHeight="200" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel x:Name="ActionFooter" Margin="0,8,0,0">
+  <ScrollViewer x:Name="FooterScroll" DockPanel.Dock="Bottom" MaxHeight="200" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel x:Name="ActionFooter" Margin="0,8,0,0">
    <TextBlock Text="{Binding EffectiveConfiguration}" FontSize="{DynamicResource UiInstructionFont}"/>
    <TextBlock Text="{Binding TestReason}" FontSize="{DynamicResource UiInstructionFont}" Margin="0,4,0,4"/>
    <WrapPanel>
@@ -12,7 +12,8 @@
     <Button Content="Cancelar" Click="CancelOperation" IsEnabled="{Binding CanCancel}" FontSize="{DynamicResource UiControlFont}" Padding="8,6" Margin="0,0,0,4"/>
    </WrapPanel>
    <ProgressBar x:Name="OperationProgress" IsIndeterminate="{Binding IsOperating}" Visibility="{Binding IsOperating, Converter={StaticResource BoolVis}}" Height="3" Margin="0,4,0,4" Foreground="{DynamicResource Progress}" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Outline}" AutomationProperties.Name="{Binding OperationMessage}"/>
-   <ui:StatusNotice Message="{Binding Message}" Summary="{Binding NoticeSummary}" Kind="{Binding MessageKind}" FontSize="{DynamicResource UiInstructionFont}"/>
+   <ui:StatusNotice x:Name="DraftNotice" Message="{Binding Message}" Summary="{Binding NoticeSummary}" Kind="{Binding FormNoticeKind}" FontSize="{DynamicResource UiInstructionFont}"/>
+   <Expander x:Name="OperationResult" Header="{Binding LastOperationTitle}" Visibility="{Binding HasOperationResult, Converter={StaticResource BoolVis}}" Margin="0,4,0,0"><ui:StatusNotice Message="{Binding LastOperationMessage}" Kind="{Binding LastOperationKind}" FontSize="{DynamicResource UiInstructionFont}"/></Expander>
   </StackPanel></ScrollViewer>
   <ScrollViewer x:Name="FormScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel IsEnabled="{Binding CanManage}" Margin="0,0,8,0">
    <StackPanel x:Name="KeyValidationGroup">

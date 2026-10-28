@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using SongSense.Core;
 namespace SongSense.App;
+public enum LyricsVersionsStep { List, Preview }
 public sealed class LyricsEditorViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly MainViewModel owner;
@@ -19,7 +20,24 @@ public sealed class LyricsEditorViewModel : INotifyPropertyChanged, IDisposable
     public string TrackLabel { get; }
     public IReadOnlyList<CandidateOption> Options { get; }
     public bool PreferManual => Options.Count == 0;
-    public string VersionsMessage => Options.Count == 0 ? "No hay versiones disponibles. Puedes introducir una letra manual." : Selected is null ? "Selecciona una versión para revisar su letra." : "Vista previa de la letra completa";
+    public LyricsVersionsStep VersionsStep { get; private set; }
+    public bool ComparingVersions { get; private set; }
+    public bool CanPreviewVersion => Selected is not null && !Saving;
+    public string VersionsMessage => Options.Count == 0 ? "No hay versiones disponibles. Puedes introducir una letra manual."
+        : ComparingVersions ? "Selecciona y compara las versiones. Solo Confirmar versión aplica la letra."
+        : VersionsStep == LyricsVersionsStep.Preview ? "Vista previa de la letra completa"
+        : "Selecciona una versión y pulsa Ver letra seleccionada para revisarla.";
+    public void SetVersionsComparison(bool comparing)
+    {
+        if (ComparingVersions == comparing) return;
+        ComparingVersions = comparing; Notify();
+    }
+    public bool OpenSelectedVersion()
+    {
+        if (!CanPreviewVersion) return false;
+        VersionsStep = LyricsVersionsStep.Preview; Notify(); return true;
+    }
+    public void ReturnToVersions() { VersionsStep = LyricsVersionsStep.List; Notify(); }
     public bool IsCurrent => owner.IsEditCurrent(context);
     public bool Saving { get; private set; }
     public bool CanEditDraft => !Saving;
@@ -59,7 +77,7 @@ public sealed class LyricsEditorViewModel : INotifyPropertyChanged, IDisposable
     private void OwnerChanged(object? sender, PropertyChangedEventArgs args) => Notify();
     private void Notify()
     {
-        foreach (var name in new[] { nameof(ErrorSummary), nameof(ManualFeedback), nameof(ManualAccessibilityHint), nameof(ManualError), nameof(ManualHint), nameof(CanCopyDraft), nameof(VersionsMessage), nameof(ManualText), nameof(CharacterCount), nameof(Selected), nameof(Preview), nameof(PreviewStanza), nameof(IsCurrent), nameof(Saving), nameof(CanEditDraft), nameof(HasChanges), nameof(IsValid), nameof(Error), nameof(SaveMessage) }) PropertyChanged?.Invoke(this, new(name));
+        foreach (var name in new[] { nameof(ErrorSummary), nameof(ManualFeedback), nameof(ManualAccessibilityHint), nameof(ManualError), nameof(ManualHint), nameof(CanCopyDraft), nameof(VersionsStep), nameof(ComparingVersions), nameof(CanPreviewVersion), nameof(VersionsMessage), nameof(ManualText), nameof(CharacterCount), nameof(Selected), nameof(Preview), nameof(PreviewStanza), nameof(IsCurrent), nameof(Saving), nameof(CanEditDraft), nameof(HasChanges), nameof(IsValid), nameof(Error), nameof(SaveMessage) }) PropertyChanged?.Invoke(this, new(name));
         ConfirmCommand.Refresh(); SaveCommand.Refresh();
     }
     public void Dispose() => owner.PropertyChanged -= OwnerChanged;

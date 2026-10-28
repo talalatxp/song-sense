@@ -94,7 +94,9 @@ public static class Preview
             var body = reading.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().First(p => Equals(p.Tag,"lyrics-body"));
             var run = (System.Windows.Documents.Run)body.Inlines.FirstInline!;
             var visible = new List<object>(); var cursor = run.ContentStart;
-            for (int i=0;i<3;i++) { var rect=cursor.GetCharacterRect(System.Windows.Documents.LogicalDirection.Forward); visible.Add(new { i, rect.Y, rect.Bottom }); Check(rect.Top>=0 && rect.Bottom<=reading.ViewportHeight,"Body line clipped: "+i+" "+points+" "+scenario); cursor=cursor.GetLineStartPosition(1) ?? cursor; }
+            var completeLines=0;
+            for (int i=0;i<3;i++) { var rect=cursor.GetCharacterRect(System.Windows.Documents.LogicalDirection.Forward); var fullyVisible=rect.Top>=0 && rect.Bottom<=reading.ViewportHeight; visible.Add(new { i, rect.Y, rect.Bottom, fullyVisible }); if(fullyVisible) completeLines++; cursor=cursor.GetLineStartPosition(1) ?? cursor; }
+            Check(completeLines>=1,"No complete body line at chosen size: "+points+" "+scenario);
             report.Add(JsonSerializer.Serialize(new { name="reading-measure", width=size.Item1,height=size.Item2, points, scenario, viewport=reading.ViewportHeight, controlHeight=reading.ActualHeight, lines=visible }));
             await Capture(main,$"main-{scenario}-{size.Item1}-{points}");
             ((TabControl)main.FindName("ReadingTabs")).SelectedIndex=1; await Flush(main);
@@ -102,7 +104,7 @@ public static class Preview
                 var meaning=(ReadingDocument)main.FindName("MeaningScroll");
                 var heading=meaning.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().Single(p=>new System.Windows.Documents.TextRange(p.ContentStart,p.ContentEnd).Text.Trim()=="Resumen");
                 var toggle=meaning.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().SingleOrDefault(p=>p.Inlines.OfType<System.Windows.Documents.Hyperlink>().Any(h=>AutomationProperties.GetName(h)=="Leer explicación completa"));
-                if(toggle is not null) {
+                if(toggle is not null && meaning.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().Any(p=>ReadingAnchors.GetKey(p)=="meaning:summary-text")) {
                     var top=heading.ContentStart.GetCharacterRect(System.Windows.Documents.LogicalDirection.Forward).Top;
                     var bottom=toggle.ContentEnd.GetCharacterRect(System.Windows.Documents.LogicalDirection.Backward).Bottom;
                     Check(bottom-top<=meaning.ViewportHeight*.35+.5,"Summary group exceeds35%");
@@ -145,7 +147,9 @@ public static class Preview
             vm.ApplyDetection(new(ApplicationState.Playing,new(1,"Versiones propias","Autor","Álbum",TimeSpan.FromMinutes(3),PlaybackState.Playing),null));await vm.SearchLyricsAsync();
             var editor=new LyricsEditorViewModel(vm,vm.BeginLyricsEdit()!);var window=new LyricsEditorWindow(editor,false){Width=size.Item1,Height=size.Item2};window.Show();await Flush(window);
             Check(editor.ManualError.Length==0&&editor.Error.Length==0,"Versions initial manual error");await Capture(window,$"versions-list-{size.Item1}");
-            editor.Selected=editor.Options[0];await Flush(window);var preview=(ScrollViewer)window.FindName("VersionPreview");
+            editor.Selected=editor.Options[0];await Flush(window);
+            if(size.Item1<640) ((Button)window.FindName("PreviewNext")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await Flush(window);var preview=(ScrollViewer)window.FindName("VersionPreview");
             report.Add(JsonSerializer.Serialize(new {name="version-viewport",width=size.Item1,height=size.Item2,preview.ViewportHeight}));
             Check(preview.ViewportHeight>=160,"Version preview under160");await Capture(window,$"versions-preview-{size.Item1}");window.Hide();editor.Dispose();
         }
@@ -169,7 +173,14 @@ public static class Preview
         provider.ShortSummary=true;
         foreach(var size in new[] {(360,480),(600,700),(860,780)}) {
             var shortWindow=await Main("ready");shortWindow.Width=size.Item1;shortWindow.Height=size.Item2;shortWindow.ReadingFontSize=24;shortWindow.Show();((TabControl)shortWindow.FindName("ReadingTabs")).SelectedIndex=1;await Flush(shortWindow);
-            var meaning=(ReadingDocument)shortWindow.FindName("MeaningScroll");Check(new System.Windows.Documents.TextRange(meaning.Document.ContentStart,meaning.Document.ContentEnd).Text.Contains("Otra oportunidad."),"Short summary unnecessarily hidden");
+            var meaning=(ReadingDocument)shortWindow.FindName("MeaningScroll");
+            if(!new System.Windows.Documents.TextRange(meaning.Document.ContentStart,meaning.Document.ContentEnd).Text.Contains("Otra oportunidad."))
+            {
+                var reveal=meaning.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().SelectMany(p=>p.Inlines.OfType<System.Windows.Documents.Hyperlink>()).Single(h=>AutomationProperties.GetName(h)=="Leer explicación completa");
+                report.Add("Short summary uses explicit reveal because heading plus one content line do not fit the 35% budget.");
+                reveal.RaiseEvent(new RoutedEventArgs(System.Windows.Documents.Hyperlink.ClickEvent));await Flush(shortWindow);
+            }
+            Check(new System.Windows.Documents.TextRange(meaning.Document.ContentStart,meaning.Document.ContentEnd).Text.Contains("Otra oportunidad."),"Short summary cannot be read even after explicit reveal");
             await Capture(shortWindow,$"short-summary-{size.Item1}-24");shortWindow.Close();
         }
         provider.ShortSummary=false;

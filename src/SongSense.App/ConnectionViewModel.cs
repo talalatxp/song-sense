@@ -21,7 +21,7 @@ public sealed partial class ConnectionViewModel : INotifyPropertyChanged, IDispo
     private string message = "";
     public ConnectionOperation Operation { get; private set; }
     public bool IsOperating => busy;
-    public bool ShowOperationResult => !busy && message.Length > 0;
+    public bool ShowOperationResult => !busy && message.Length > 0 && !(IsModelStep && Operation == ConnectionOperation.Catalog);
     public string OperationTitle => Operation switch
     {
         ConnectionOperation.Access => "Conectando la cuenta…", ConnectionOperation.Catalog => "Consultando modelos…",
@@ -56,9 +56,9 @@ public sealed partial class ConnectionViewModel : INotifyPropertyChanged, IDispo
     public string ModelMessage => CatalogState switch
     {
         ModelCatalogState.Loading => "Consultando modelos en OpenAI… Puede tardar hasta 30 segundos por petición.",
-        ModelCatalogState.Empty => "OpenAI respondió, pero no devolvió modelos disponibles para mostrar en esta cuenta. No se ha elegido ningún modelo.",
+        ModelCatalogState.Empty => "OpenAI respondió sin modelos disponibles para esta cuenta. No se ha elegido ninguno. Pulsa Consultar de nuevo o revisa la cuenta en Configuración.",
         ModelCatalogState.Available => $"{Models.Count} modelos disponibles. Elige uno y pulsa Guardar modelo seleccionado.",
-        ModelCatalogState.Cancelled => "Consulta de modelos cancelada. Puedes volver a intentarlo.",
+        ModelCatalogState.Cancelled => "Consulta de modelos cancelada. Pulsa Consultar de nuevo cuando quieras.",
         ModelCatalogState.Failed => DescribeCatalogFailure(connection.CatalogFailure),
         _ => connection.PlanGranted ? "Pulsa Consultar modelos para cargar la lista de tu cuenta." : "Para consultar modelos, conecta la cuenta y concede el permiso de uso del plan."
     };
@@ -149,7 +149,8 @@ public sealed partial class ConnectionViewModel : INotifyPropertyChanged, IDispo
         message = revoked ? "Sesión revocada en OpenAI y tokens eliminados localmente. Se conserva la identidad del registro para volver a conectar." :
             "Tokens eliminados localmente. No se confirmó la revocación remota: desconecta Song Sense en los ajustes de ChatGPT.";
     });
-    public static void ManageUsage() => Process.Start(new ProcessStartInfo("https://chatgpt.com/settings/usage") { UseShellExecute = true });
+    public static Uri UsagePage { get; } = new("https://chatgpt.com/settings/usage");
+    public static void ManageUsage() => Process.Start(new ProcessStartInfo(UsagePage.AbsoluteUri) { UseShellExecute = true });
     public void Cancel() => request?.Cancel();
     private void ClearOperationResult() { if (busy) return; message = ""; Changed(nameof(Message)); Changed(nameof(ShowOperationResult)); }
     private Task RunAsync(ConnectionOperation kind, Func<CancellationToken, Task> operation)
@@ -189,7 +190,7 @@ public sealed partial class ConnectionViewModel : INotifyPropertyChanged, IDispo
     {
         AiFailure.SessionExpired => "La sesión ha caducado y no se pudo renovar. Vuelve a conectar la cuenta.",
         AiFailure.Authentication when error.HttpStatus == 401 => "OpenAI rechazó la sesión. Vuelve a conectar la cuenta.",
-        AiFailure.Authentication when error.HttpStatus == 403 => "OpenAI rechazó la consulta del catálogo. La respuesta no confirma la causa. Revisa el diagnóstico antes de reintentar.",
+        AiFailure.Authentication when error.HttpStatus == 403 => "OpenAI rechazó la consulta del catálogo. La respuesta no confirma la causa. Pulsa Consultar de nuevo o revisa la cuenta en Configuración.",
         AiFailure.InvalidResponse => "OpenAI devolvió un catálogo incompatible o mayor que el tamaño permitido. Puedes reintentar o revisar el diagnóstico.",
         AiFailure.Disabled => "La cuenta no tiene permiso de uso del plan. Revisa la conexión y los permisos.",
         AiFailure.Timeout => "La consulta de modelos agotó el plazo. Puedes reintentar manualmente.",

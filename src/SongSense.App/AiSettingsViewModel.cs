@@ -33,7 +33,11 @@ public sealed partial class AiSettingsViewModel(AiConfigurationService service, 
     public Task ConfirmKeyDeletionAsync(long revision) => revision == keyRevision && hasKey && CanManage ? DeleteKeyAsync() : Task.CompletedTask;
     private string message = "Cargando ajustes locales…";
     private NoticeKind messageKind;
-    public NoticeKind MessageKind => busy ? NoticeKind.Progress : messageKind;
+    public NoticeKind MessageKind => busy ? NoticeKind.Progress : HasChanges || validationAttempted ? FormNoticeKind : messageKind;
+    public bool HasOperationResult { get; private set; }
+    public string LastOperationTitle { get; private set; } = "";
+    public string LastOperationMessage { get; private set; } = "";
+    public NoticeKind LastOperationKind { get; private set; }
     private bool enabled, accepted;
     private string model = "", limitText = "20";
     public bool AiEnabled { get => enabled; set { enabled = value; NotifyForm(); } }
@@ -44,10 +48,10 @@ public sealed partial class AiSettingsViewModel(AiConfigurationService service, 
     public bool CanCancel => busy && request is not null;
     public string KeyStatus => hasKey ? "Hay una clave guardada y cifrada. Déjalo vacío para conservarla." : "No hay una clave guardada.";
     public string CountLabel { get; private set; } = "";
-    public string Message => message;
+    public string Message => IsDraftValid || busy ? FormInstruction : FormInstruction + " " + string.Join(" ", new[] { CurrentKeyError, CurrentModelError, CurrentLimitError, CurrentNoticeError }.Where(x => x.Length > 0));
     public event PropertyChangedEventHandler? PropertyChanged;
     public event EventHandler<AppSettings>? SettingsLoaded;
-    private void Notify() { foreach (var name in new[] { nameof(Operation), nameof(IsOperating), nameof(OperationMessage), nameof(HasKey), nameof(AiEnabled), nameof(Model), nameof(Limit), nameof(NoticeAccepted), nameof(CanManage), nameof(CanCancel), nameof(KeyStatus), nameof(CountLabel), nameof(Message), nameof(MessageKind) }) PropertyChanged?.Invoke(this, new(name)); NotifyForm(); }
+    private void Notify() { foreach (var name in new[] { nameof(Operation), nameof(IsOperating), nameof(OperationMessage), nameof(HasKey), nameof(AiEnabled), nameof(Model), nameof(Limit), nameof(NoticeAccepted), nameof(CanManage), nameof(CanCancel), nameof(KeyStatus), nameof(CountLabel), nameof(Message), nameof(MessageKind), nameof(HasOperationResult), nameof(LastOperationTitle), nameof(LastOperationMessage), nameof(LastOperationKind) }) PropertyChanged?.Invoke(this, new(name)); NotifyForm(); }
 
     public Task InitializeAsync() => RunAsync(ApiSettingsOperation.Loading, async token => { if (!modeSubscribed && analysisSession is not null) { analysisSession.Changed += ModeChanged; modeSubscribed = true; } await ReloadAsync(token); initialized = true; message = "Abrir y guardar ajustes no hace solicitudes de red."; });
     public Task SaveAsync(SecureString key) => !CanManage || !ValidateForm(key) ? Task.CompletedTask : RunAsync(ApiSettingsOperation.Saving, async token =>
@@ -135,6 +139,17 @@ public sealed partial class AiSettingsViewModel(AiConfigurationService service, 
                     Activity.UpdateCounter(service.LocalDate, data.Count, data.Settings.DailyRequestLimit);
                 }
                 catch (Exception) { messageKind = NoticeKind.Error; Activity.UpdateCounter(service.LocalDate, null, 0); CountLabel = "Contador local no disponible."; message = Describe(AiFailure.LocalStorage); }
+            }
+            if (Operation != ApiSettingsOperation.Loading)
+            {
+                LastOperationTitle = Operation switch
+                {
+                    ApiSettingsOperation.Testing => $"Resultado anterior: prueba de API · {saved.Model}",
+                    ApiSettingsOperation.Saving => "Resultado anterior: guardar ajustes",
+                    _ => "Resultado anterior: eliminar clave"
+                };
+                LastOperationTitle += messageKind switch { NoticeKind.Error => " · fallida", NoticeKind.Warning => " · cancelada", _ => " · completada" };
+                HasOperationResult = true; LastOperationMessage = message; LastOperationKind = messageKind;
             }
             current.Dispose(); request = null; busy = false; Operation = ApiSettingsOperation.None; Notify();
         }

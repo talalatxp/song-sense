@@ -6,7 +6,7 @@
   <TextBlock Text="Lectura" FontSize="{DynamicResource UiHeading18}"/>
   <TextBlock Text="Idioma de lectura · traducción y explicación" Margin="0,12,0,6"/>
   <ComboBox ItemsSource="{Binding AvailableLanguages}" DisplayMemberPath="Name" SelectedValuePath="Code" SelectedValue="{Binding TargetLanguage, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanChangeLanguage}" AutomationProperties.Name="Idioma de lectura · traducción y explicación" AutomationProperties.ItemStatus="{Binding SelectedItem.Name, RelativeSource={RelativeSource Self}}"/>
-  <TextBlock Text="{Binding LanguageMessage}" Style="{StaticResource OptionalText}" FontSize="{DynamicResource UiInstructionFont}" Margin="0,8,0,0"/>
+  <TextBlock Text="{Binding LanguagePreferenceStatus}" FontSize="{DynamicResource UiInstructionFont}" Margin="0,8,0,0"/>
   <Button Content="Reintentar guardado de idioma" Command="{Binding RetryLanguageCommand}" Style="{StaticResource ActiveRetry}" Margin="0,8,0,0"/>
   <TextBlock Text="Tamaño del texto · 12 a 24 puntos" Margin="0,16,0,8"/>
   <Slider x:Name="ReadingSize" Minimum="12" Maximum="24" TickFrequency="1" IsSnapToTickEnabled="True" Value="{Binding Owner.ReadingFontSize, RelativeSource={RelativeSource AncestorType=Window}, Mode=TwoWay}" AutomationProperties.Name="Tamaño de texto, de 12 a 24 puntos"/>

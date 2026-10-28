@@ -30,7 +30,7 @@ public partial class AiSettingsWindow : Window
             if (canClose) return;
             args.Cancel = true;
             if (closing) return;
-            if (viewModel.HasChanges && !ConfirmationWindow.Ask(this, "Cambios sin guardar", "Hay cambios sin guardar. Descartar elimina también la clave recién escrita de este formulario. No se guardará ningún borrador. ¿Descartar y cerrar?", "Descartar y cerrar", "Continuar editando")) return;
+            if (viewModel.HasChanges && !ConfirmationWindow.Ask(this, "Cambios sin guardar", viewModel.DiscardChangesMessage, "Descartar y cerrar", "Continuar editando")) return;
             closing = true;
             KeyInput.Clear();
             await viewModel.StopAsync();
@@ -54,7 +54,7 @@ public partial class AiSettingsWindow : Window
         KeyInput.Clear(); await viewModel.ConfirmKeyDeletionAsync(revision);
     }
     private async void TestConnection(object sender, RoutedEventArgs args) => await viewModel.TestAsync();
-    private void KeyChanged(object sender, RoutedEventArgs args) { if (viewModel is not null) { using var key = KeyInput.SecurePassword; viewModel.KeyEdited(key.Length); } }
+    private void KeyChanged(object sender, RoutedEventArgs args) { if (viewModel is not null) { using var key = KeyInput.SecurePassword; viewModel.KeyEdited(key); } }
     private void FocusInvalidField(object? sender, EventArgs args)
     {
         FrameworkElement target = viewModel.FirstInvalidField switch { "Model" => ModelInput, "Limit" => LimitInput, "Notice" => NoticeInput, _ => KeyInput };

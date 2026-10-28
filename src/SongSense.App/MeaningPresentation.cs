@@ -15,16 +15,16 @@ public sealed class MeaningPresentation : IDisposable
     private readonly ReadingDocument view;
     private readonly string summary;
     private readonly Run summaryRun = new();
-    private readonly Paragraph summaryToggle = new() { FontFamily = new FontFamily("Segoe UI"), FontSize = 14, LineHeight = 21, Tag = "metadata" };
+    private readonly Paragraph summaryToggle = Role(new Paragraph { Tag = "metadata" }, ReadingTextRole.Navigation);
     private readonly Paragraph summaryHeading = Heading("Resumen");
     private readonly Paragraph summaryParagraph;
     private bool expanded;
-    private (double Width, double Font, double Height) measured;
+    private (double Width, double Font, double Height, double Control) measured;
 
     public MeaningPresentation(ReadingDocument view, SongInsight insight)
     {
         this.view = view; summary = insight.Summary;
-        summaryParagraph = new Paragraph(summaryRun) { Tag = "metadata" };
+        summaryParagraph = Role(new Paragraph(summaryRun) { Tag = "metadata" }, ReadingTextRole.Content);
         ReadingAnchors.SetKey(summaryHeading, "meaning:summary-heading"); ReadingAnchors.SetKey(summaryParagraph, "meaning:summary-text"); ReadingAnchors.SetKey(summaryToggle, "meaning:summary-toggle");
         Add(summaryHeading); Add(summaryParagraph);
         var more = new Hyperlink(new Run("Leer explicación completa")) { Focusable = true };
@@ -42,7 +42,7 @@ public sealed class MeaningPresentation : IDisposable
         if (insight.Themes.Count > 0)
         {
             Add(Heading("Temas"));
-            var themes = new List { FontFamily = new FontFamily("Segoe UI"), FontSize = 14, LineHeight = 21, Margin = new Thickness(0), MarkerStyle = TextMarkerStyle.Disc, Padding = new Thickness(24, 0, 0, 0) };
+            var themes = Role(new List { Margin = new Thickness(0), MarkerStyle = TextMarkerStyle.Disc, Padding = new Thickness(24, 0, 0, 0) }, ReadingTextRole.Content);
             foreach (var theme in insight.Themes) themes.ListItems.Add(new ListItem(new Paragraph(new Run(theme)) { Tag = "metadata" }));
             Add(themes);
         }
@@ -64,27 +64,28 @@ public sealed class MeaningPresentation : IDisposable
         {
             Add(Heading("Límites de esta interpretación"));
             Add(new Paragraph(new Run("Límites generales del análisis; no están vinculados a una afirmación concreta.")));
-            var limits = new List { MarkerStyle = TextMarkerStyle.Disc, Padding = new Thickness(24, 0, 0, 0) };
+            var limits = Role(new List { MarkerStyle = TextMarkerStyle.Disc, Padding = new Thickness(24, 0, 0, 0) }, ReadingTextRole.Content);
             foreach (var warning in insight.Warnings) limits.ListItems.Add(new ListItem(new Paragraph(new Run(warning))));
             Add(limits);
         }
         view.TypographyChanged += TypographyChanged;
         view.SizeChanged += ViewSizeChanged;
-        Reflow();
+        view.ApplyTypography();
     }
 
     private void Add(Block block) => view.Document.Blocks.Add(block);
-    private static Paragraph Heading(string text) => new(new Bold(new Run(text))) { FontFamily = new FontFamily("Segoe UI"), FontSize = 14, LineHeight = 21, Tag = "metadata" };
+    private static T Role<T>(T block, ReadingTextRole role) where T : Block { ReadingDocument.SetTextRole(block, role); return block; }
+    private static Paragraph Heading(string text) => Role(new Paragraph(new Run(text)) { Tag = "metadata" }, ReadingTextRole.Heading);
     private void AddDetails(string identity, string label, Section[] sections, string? hint)
     {
         if (sections.Length == 0) return;
-        var link = new Hyperlink(new Run(label + " ▸")) { Focusable = true }; var heading = new Paragraph(link) { FontFamily = new FontFamily("Segoe UI"), FontSize = 14, LineHeight = 21, Tag = "metadata" }; Add(heading);
+        var link = new Hyperlink(new Run(label + " ▸")) { Focusable = true }; var heading = Role(new Paragraph(link) { Tag = "metadata" }, ReadingTextRole.Navigation); Add(heading);
         KeyboardNavigation.SetIsTabStop(link, true);
         link.SetResourceReference(TextElement.ForegroundProperty, "Gold");
         AutomationProperties.SetAutomationId(link, identity);
         ReadingAnchors.SetKey(heading, identity);
         AutomationProperties.SetName(link, label + " · desplegar");
-        var preview = new Paragraph(new Run(ShortHint(hint ?? ""))) { Tag = "metadata", FontSize = 12, LineHeight = 18, FontFamily = new FontFamily("Segoe UI") };
+        var preview = Role(new Paragraph(new Run(ShortHint(hint ?? ""))) { Tag = "metadata" }, ReadingTextRole.Secondary);
         preview.SetResourceReference(TextElement.ForegroundProperty, "Muted"); Add(preview);
         var contents = new Section(); foreach (var section in sections) contents.Blocks.Add(section);
         bool open = false;
@@ -103,7 +104,7 @@ public sealed class MeaningPresentation : IDisposable
     }
     private void TypographyChanged(object? sender, EventArgs e)
     {
-        var key = (ContentWidth, view.FontSize, view.ViewportHeight > 0 ? view.ViewportHeight : view.ActualHeight);
+        var key = (ContentWidth, view.FontSize, view.ViewportHeight > 0 ? view.ViewportHeight : view.ActualHeight, view.UiControlSize);
         if (key == measured) return;
         Reflow();
     }
@@ -111,11 +112,16 @@ public sealed class MeaningPresentation : IDisposable
     private void Reflow() => view.PreserveReadingPosition(ReflowCore);
     private void ReflowCore()
     {
-        measured = (ContentWidth, view.FontSize, view.ViewportHeight > 0 ? view.ViewportHeight : view.ActualHeight);
-        // Heading and reveal link each use a 21 DIP line. Short summaries need no reveal link.
+        // A clipped summary or an unnecessary toggle can be detached during resizing.
+        // Update those blocks too before measuring or reinserting them.
+        view.ApplyBlockTypography(summaryHeading); view.ApplyBlockTypography(summaryParagraph); view.ApplyBlockTypography(summaryToggle);
+        measured = (ContentWidth, view.FontSize, view.ViewportHeight > 0 ? view.ViewportHeight : view.ActualHeight, view.UiControlSize);
+        // Measure wrapping at the actual heading/navigation sizes, including UI scaling.
         var budget = measured.Height > 0 ? measured.Height * .35 : double.PositiveInfinity;
-        var whole = PreviewSummary(summary, measured.Width, measured.Font, Math.Max(0, budget - 21));
-        var preview = whole == summary ? summary : PreviewSummary(summary, measured.Width, measured.Font, Math.Max(0, budget - 42));
+        var headingHeight = MeasureLabel("Resumen", measured.Width, summaryHeading.FontSize, FontWeights.SemiBold);
+        var linkHeight = MeasureLabel("Leer explicación completa", measured.Width, summaryToggle.FontSize, FontWeights.Normal);
+        var whole = PreviewSummary(summary, measured.Width, measured.Font, Math.Max(0, budget - headingHeight));
+        var preview = whole == summary ? summary : PreviewSummary(summary, measured.Width, measured.Font, Math.Max(0, budget - headingHeight - linkHeight));
         var text = expanded ? summary : preview;
         if (summaryRun.Text != text)
         {
@@ -131,6 +137,13 @@ public sealed class MeaningPresentation : IDisposable
         var present = ReferenceEquals(summaryToggle.Parent, view.Document);
         if (preview != summary && !present) view.Document.Blocks.InsertAfter(text.Length > 0 ? summaryParagraph : summaryHeading, summaryToggle);
         else if (preview == summary && present) view.Document.Blocks.Remove(summaryToggle);
+    }
+
+    private static double MeasureLabel(string text, double width, double font, FontWeight weight)
+    {
+        var measure = new TextBlock { Text = text, FontFamily = new FontFamily("Segoe UI"), FontSize = font, FontWeight = weight,
+            TextWrapping = TextWrapping.Wrap, LineHeight = font * 1.5, LineStackingStrategy = LineStackingStrategy.BlockLineHeight };
+        measure.Measure(new Size(width, double.PositiveInfinity)); return measure.DesiredSize.Height;
     }
 
     public static string PreviewSummary(string text, double width, double fontSize, double maximumHeight = double.PositiveInfinity)

@@ -234,7 +234,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
         if (changed)
         {
             lyricsSaveState = ContentSaveState.SessionOnly;
-            if (!languageSaving && !languageSaveFailed) { languageMessage = ""; OnChanged(nameof(LanguageMessage)); }
+            ClearLanguageNotice();
             lastLyricsFailure = null; lyricsCancelled = false;
             pendingCachedLyrics = null; cacheMessage = "";
             InvalidateInsight();
@@ -389,7 +389,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
 
     private void InvalidateInsight(bool preserveResult = false)
     {
-        if (!preserveResult && !languageSaving && !languageSaveFailed) { languageMessage = ""; OnChanged(nameof(LanguageMessage)); }
+        if (!preserveResult) ClearLanguageNotice();
         var preserved = preserveResult ? Insight : null;
         var preservedUsage = Usage;
         var preservedSaveState = insightSaveState;
@@ -405,7 +405,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
     private void NotifyInsight()
     {
         foreach (var name in new[] { nameof(ReadingContextHint), nameof(ShowPreparationNotice), nameof(PreparationNoticeDetails), nameof(PreparationSummary) }) OnChanged(name);
-        OnChanged(nameof(LanguageNoticeKind));
+        NotifyLanguageNotice();
         NotifyProvenance();
         OnChanged(nameof(ReadingBlocks));
         foreach (var property in new[] { nameof(AiDecisionLabel), nameof(AiDecisionAction), nameof(Preparation), nameof(DisplayStatus), nameof(DisplayNotice), nameof(DisplayNoticeKind), nameof(CompactUsage), nameof(ReadingHint), nameof(ShowGenerate), nameof(ShowSearch), nameof(ShowPrimaryAction), nameof(CanPrimaryAction), nameof(PrimaryActionLabel), nameof(ShowDiagnostic), nameof(DiagnosticDetails), nameof(CanEditLyrics) }) OnChanged(property);
@@ -438,7 +438,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
     {
         if (!(force ? RegenerateCommand.CanExecute(null) : GenerateInsightCommand.CanExecute(null)) || CurrentTrack is not { } track || PreparedLyrics is not { } lyrics) return Task.CompletedTask;
         var revision = LyricsRevision;
-        languageMessage = ""; OnChanged(nameof(LanguageMessage));
+        ClearLanguageNotice();
         var configuration = configurationRevision;
         var request = CancellationTokenSource.CreateLinkedTokenSource(lifetime);
         insightRequest = request; analysing = true;
@@ -629,7 +629,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
             {
                 var insight = await CacheIoAsync(() => cache!.ReadInsightAsync(lyrics, EffectiveModel!, CacheIdentity.Version, lifetime, track, CacheScope, language), lifetime);
                 if (CacheContextCurrent(track, revision, configuration, epoch) && !analysing && insight is not null)
-                { Insight = insight with { LyricsRevision = revision }; insightSaveState = ContentSaveState.Saved; insightState = ApplicationState.Ready; insightMessage = "Análisis recuperado de la caché local, sin solicitud de IA."; Usage = NewUsage(AiUsageState.RecuperadoDeCache, "Lectura guardada", track, revision); Activity.Record(Usage); NotifyInsight(); }
+                { Insight = insight with { LyricsRevision = revision }; insightSaveState = ContentSaveState.Saved; insightState = ApplicationState.Ready; insightMessage = "Análisis recuperado de la caché local, sin solicitud de IA."; Usage = NewUsage(AiUsageState.RecuperadoDeCache, "Lectura guardada", track, revision); Activity.Record(Usage); LanguageCacheRestored(); NotifyInsight(); }
             }
             else if (PreparedLyrics is { IsInstrumental: true }) { lyricsState = ApplicationState.Ready; lyricsMessage = "Esta canción es instrumental · Caché local"; NotifyLyrics(); }
         }

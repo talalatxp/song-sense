@@ -466,7 +466,7 @@ public sealed class ChatGptTests : IDisposable
         if (status == HttpStatusCode.Forbidden)
         { Assert.Contains("HTTP: 403", view.DiagnosticDetails); Assert.DoesNotContain("HTTP", view.ModelMessage); Assert.False(view.CanSelectModel); }
         else if (count == 0)
-        { Assert.Contains("no devolvió modelos", view.ModelMessage); Assert.False(view.CanSelectModel); }
+        { Assert.Contains("sin modelos disponibles", view.ModelMessage); Assert.Contains("Consultar de nuevo", view.ModelMessage); Assert.False(view.CanSelectModel); }
         else
         {
             Assert.Contains("1 modelos disponibles", view.ModelMessage); Assert.True(view.CanSelectModel);

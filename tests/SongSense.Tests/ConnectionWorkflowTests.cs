@@ -45,7 +45,8 @@ public sealed class ConnectionWorkflowTests : IDisposable
         Assert.Equal(ModelCatalogState.Cancelled, view.CatalogState); Assert.Equal(2, view.Step);
         Assert.Contains("Consulta de modelos cancelada", view.Message); Assert.DoesNotContain("login", view.Message);
         Assert.Equal("model-a", connection.Model); Assert.Equal(enabled, connection.CanGenerate);
-        Assert.True(view.CreditsDisabledConfirmed); Assert.True(view.ShowOperationResult);
+        Assert.True(view.CreditsDisabledConfirmed); Assert.False(view.ShowOperationResult);
+        Assert.Contains("cancelada", view.ModelMessage); Assert.Equal("Consultar de nuevo", view.PrimaryLabel);
         using var reopened = new ConnectionViewModel(connection, CancellationToken.None);
         Assert.Equal(enabled ? 4 : 3, reopened.Step); Assert.False(reopened.ShowOperationResult);
         Assert.DoesNotContain("Conecta", reopened.PrimaryReason);

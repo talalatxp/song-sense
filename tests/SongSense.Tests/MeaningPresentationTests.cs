@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Threading;
 using SongSense.App;
 using SongSense.Core;
 using Xunit;
@@ -23,6 +24,83 @@ public sealed class MeaningPresentationTests
     private static string Text(ReadingDocument view) => new TextRange(view.Document.ContentStart, view.Document.ContentEnd).Text;
     private static IEnumerable<Hyperlink> Links(ReadingDocument view) => view.Document.Blocks.OfType<Paragraph>().SelectMany(p => p.Inlines.OfType<Hyperlink>());
     private static void Click(Hyperlink link) => link.RaiseEvent(new RoutedEventArgs(Hyperlink.ClickEvent));
+    private static IEnumerable<Paragraph> Paragraphs(BlockCollection blocks)
+    {
+        foreach (var block in blocks)
+        {
+            if (block is Paragraph paragraph) yield return paragraph;
+            if (block is Section section) foreach (var nested in Paragraphs(section.Blocks)) yield return nested;
+            if (block is System.Windows.Documents.List list) foreach (var item in list.ListItems) foreach (var nested in Paragraphs(item.Blocks)) yield return nested;
+        }
+    }
+    public static IEnumerable<object[]> TypographyMatrix()
+    {
+        foreach (var points in new[] { 12d, 16d, 20d, 24d })
+        foreach (var scale in new[] { 1d, 1.57d }) yield return [points, scale];
+    }
+    [Theory]
+    [MemberData(nameof(TypographyMatrix))]
+    public void FullMeaningUsesReadingSizeForEveryContentCategoryAndScaledUiForHierarchy(double points, double scale) => Sta(() =>
+    {
+        var view = new ReadingDocument { UiControlSize = 14 * scale, UiSecondarySize = 12 * scale }; view.SetPointSize(points);
+        using var presentation = new MeaningPresentation(view, Result("Resumen corto", 2));
+        foreach (var link in Links(view).ToArray()) Click(link);
+        foreach (var paragraph in Paragraphs(view.Document.Blocks))
+        {
+            var role = ReadingDocument.GetTextRole(paragraph);
+            var expected = role switch
+            {
+                ReadingTextRole.Heading => Math.Max(14 * scale, .9 * points * 4 / 3),
+                ReadingTextRole.Navigation => Math.Max(14 * scale, .85 * points * 4 / 3),
+                ReadingTextRole.Secondary => 12 * scale,
+                _ => points * 4 / 3
+            };
+            Assert.Equal(expected, paragraph.FontSize, 6); Assert.Equal(expected * 1.5, paragraph.LineHeight, 6);
+            if (role == ReadingTextRole.Heading) Assert.Equal(FontWeights.SemiBold, paragraph.FontWeight);
+        }
+        var body = Paragraphs(view.Document.Blocks).ToArray();
+        foreach (var category in new[] { "Resumen corto", "Cambio", "«Cita 1»", "Explicación 1", "Alternativa 1", "Límite 1" })
+        {
+            // WPF includes the list marker in a paragraph's native text range.
+            var paragraph = Assert.Single(body, p => ReadingDocument.GetTextRole(p) != ReadingTextRole.Secondary && new TextRange(p.ContentStart, p.ContentEnd).Text.Trim().TrimStart('•', '\t', ' ') == category);
+            Assert.Equal(points * 4 / 3, paragraph.FontSize, 6);
+        }
+    });
+    [Fact]
+    public void UiResourcesRecalculateHierarchyWithoutMultiplyingReadingSizeOrReplacingDocument() => Sta(() =>
+    {
+        var view = new ReadingDocument(); UiTypography.Apply(view.Resources, 1); view.SetPointSize(12);
+        using var presentation = new MeaningPresentation(view, Result("Resumen corto", 1)); var document = view.Document;
+        UiTypography.Apply(view.Resources, 1.57);
+        Assert.Equal(14 * 1.57, view.UiControlSize, 6); Assert.Equal(12 * 1.57, view.UiSecondarySize, 6);
+        Assert.Equal(16, view.FontSize); Assert.Same(document, view.Document);
+        var heading = view.Document.Blocks.OfType<Paragraph>().First(p => ReadingDocument.GetTextRole(p) == ReadingTextRole.Heading);
+        Assert.Equal(21.98, heading.FontSize, 6);
+    });
+    [Fact]
+    public void SummaryReinsertedAfterSmallViewportUsesTheNewReadingSize() => Sta(() =>
+    {
+        var view = new ReadingDocument(); view.SetPointSize(12);
+        using var presentation = new MeaningPresentation(view, Result(string.Join(' ', Enumerable.Repeat("Una oportunidad para observar la luz.", 70))));
+        var window = new Window { Width = 360, Height = 180, Content = view, ShowActivated = false };
+        void Flush()
+        {
+            for (var i = 0; i < 4; i++)
+            {
+                window.UpdateLayout(); var frame = new DispatcherFrame();
+                window.Dispatcher.BeginInvoke(() => frame.Continue = false, DispatcherPriority.ApplicationIdle); Dispatcher.PushFrame(frame);
+            }
+        }
+        try
+        {
+            window.Show(); Flush();
+            Assert.DoesNotContain(view.Document.Blocks.OfType<Paragraph>(), p => ReadingAnchors.GetKey(p) == "meaning:summary-text");
+            view.SetPointSize(24); window.Height = 800; Flush();
+            var paragraph = Assert.Single(view.Document.Blocks.OfType<Paragraph>(), p => ReadingAnchors.GetKey(p) == "meaning:summary-text");
+            Assert.Equal(32, paragraph.FontSize); Assert.Equal(48, paragraph.LineHeight);
+        }
+        finally { window.Close(); }
+    });
 
     [Theory]
     [InlineData(120,12)] [InlineData(220,24)] [InlineData(500,20)]

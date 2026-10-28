@@ -173,8 +173,10 @@ public sealed class OutputLanguageTests : IDisposable
         await vm.InitializeAsync(); vm.ApplyDetection(new(ApplicationState.Playing, Track, null)); vm.SaveManual(vm.BeginLyricsEdit()!, Lyrics.Text);
         vm.TargetLanguage = "it"; await vm.WaitForCacheAsync(); await vm.GenerateInsightAsync();
         Assert.Equal(0, provider.Calls); Assert.NotEmpty(vm.LanguageMessage); Assert.False(vm.GenerateInsightCommand.CanExecute(null));
+        Assert.True(vm.ShowLanguageMessage); Assert.False(vm.ShowPreparationNotice);
+        Assert.Contains("Italiano", vm.LanguageSummary); Assert.Equal(PreparationAction.RetryLanguage, vm.Preparation.Action);
         store.Fail = false; await vm.RetryLanguageAsync(); await vm.GenerateInsightAsync();
-        Assert.Equal("it", vm.Insight!.TargetLanguage); Assert.Equal(1, provider.Calls); await vm.StopAsync();
+        Assert.Equal("it", vm.Insight!.TargetLanguage); Assert.Equal(1, provider.Calls); Assert.False(vm.ShowLanguageMessage); await vm.StopAsync();
     }
 
     [Fact]
@@ -186,8 +188,12 @@ public sealed class OutputLanguageTests : IDisposable
         var blocks = vm.ReadingBlocks; await vm.RefreshPreparationTimeAsync(); Assert.Same(blocks, vm.ReadingBlocks);
         vm.ApplyAiSettings(new(true, "test-model")); await vm.WaitForCacheAsync(); Assert.Same(blocks, vm.ReadingBlocks);
         vm.TargetLanguage = "en"; await vm.WaitForCacheAsync(); Assert.Null(vm.Insight);
-        Assert.Contains("Idioma cambiado a Inglés. No se ha enviado una consulta.", vm.LanguageMessage); Assert.Contains("guardado confirmado", vm.LanguageMessage);
+        Assert.Contains("Idioma cambiado a Inglés. No se ha enviado una consulta nueva.", vm.LanguageMessage); Assert.Contains("guardado confirmado", vm.LanguageMessage);
+        Assert.True(vm.ShowLanguageMessage); Assert.False(vm.ShowPreparationNotice);
+        Assert.Equal("es", vm.IdentifiedSourceLanguage); Assert.Equal(Lyrics.Text, vm.PreparedLyrics!.Text);
         vm.TargetLanguage = "es"; await vm.WaitForCacheAsync(); Assert.Equal("es", vm.Insight!.TargetLanguage);
+        Assert.Contains("Español recuperado", vm.LanguageMessage); Assert.DoesNotContain("Aún no hay", vm.LanguageMessage);
+        Assert.DoesNotContain("Idioma cambiado", vm.LanguageMessage); Assert.DoesNotContain("resultado anterior", vm.LanguageMessage);
         Assert.Equal(AiUsageState.RecuperadoDeCache, vm.Usage.State); Assert.Equal(1, provider.Calls); await vm.StopAsync();
     }
     [Fact]
@@ -210,15 +216,64 @@ public sealed class OutputLanguageTests : IDisposable
         Assert.Contains("no registrados", vm.AnalysisDetails); vm.TargetLanguage = "en"; await vm.WaitForCacheAsync();
         Assert.DoesNotContain("guardado confirmado", vm.LanguageMessage); Assert.Null(vm.Insight); Assert.Equal(1, provider.Calls); await vm.StopAsync();
     }
+    [Theory]
+    [InlineData("track")] [InlineData("lyrics")] [InlineData("model")]
+    public async Task PendingPreferenceSaveCannotRecreateNoticeForAnOldContext(string change)
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var store = new FailingStore { Fail = false, Save = async _ => { started.TrySetResult(); await release.Task; } };
+        var provider = new Provider(); var vm = new MainViewModel(store, provider, insightProvider: provider);
+        await vm.InitializeAsync(); vm.ApplyDetection(new(ApplicationState.Playing, Track, null)); vm.SaveManual(vm.BeginLyricsEdit()!, Lyrics.Text);
+        vm.TargetLanguage = "en"; await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Contains("Guardando", vm.LanguageMessage); Assert.False(vm.GenerateInsightCommand.CanExecute(null));
+        if (change == "track") vm.ApplyDetection(new(ApplicationState.Playing, Track with { Revision = 2, Title = "Other song" }, null));
+        else if (change == "lyrics") vm.SaveManual(vm.BeginLyricsEdit()!, Lyrics.Text + " editada");
+        else vm.ApplyAiSettings(new(true, "other-model"));
+        release.SetResult(); await vm.WaitForCacheAsync();
+        Assert.False(vm.ShowLanguageMessage); Assert.Empty(vm.LanguageSummary); Assert.Equal(0, provider.Calls);
+        await vm.StopAsync();
+    }
+    [Fact]
+    public async Task LanguageChangeExplainsCancellationAndRejectsLateResultUntilExplicitGeneration()
+    {
+        var pending = new TaskCompletionSource<SongInsight>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var provider = new Provider { Generate = _ => pending.Task };
+        var vm = new MainViewModel(await Store(), provider, insightProvider: provider);
+        await vm.InitializeAsync(); vm.ApplyDetection(new(ApplicationState.Playing, Track, null)); vm.SaveManual(vm.BeginLyricsEdit()!, Lyrics.Text);
+        var operation = vm.GenerateInsightAsync(); Assert.Equal(1, provider.Calls);
+        vm.TargetLanguage = "en"; await vm.WaitForCacheAsync();
+        Assert.Contains("canceló el análisis", vm.LanguageMessage); Assert.Contains("puede consumir", vm.LanguageMessage);
+        Assert.Contains("puede haber consumo", vm.LanguageSummary); Assert.Contains("Inglés", vm.LanguageSummary);
+        pending.SetResult(Result("es")); await operation;
+        Assert.Null(vm.Insight); Assert.Equal("en", vm.TargetLanguage); Assert.Equal(Lyrics.Text, vm.PreparedLyrics!.Text);
+        Assert.Equal(1, provider.Calls); Assert.True(vm.ShowLanguageMessage);
+        provider.Generate = target => Task.FromResult(Result(target)); await vm.GenerateInsightAsync();
+        Assert.Equal("en", vm.Insight!.TargetLanguage); Assert.Equal(2, provider.Calls); Assert.False(vm.ShowLanguageMessage);
+        await vm.StopAsync();
+    }
+    [Fact]
+    public async Task RapidChangesAndRetryNeverGenerateAndFailureHasAnActionWithoutATrack()
+    {
+        var store = new FailingStore(); var provider = new Provider(); var vm = new MainViewModel(store, provider, insightProvider: provider);
+        await vm.InitializeAsync();
+        vm.TargetLanguage = "fr"; vm.TargetLanguage = "de"; vm.TargetLanguage = "pt"; await vm.WaitForCacheAsync();
+        Assert.Contains("Portugués", vm.LanguageMessage); Assert.DoesNotContain("Francés", vm.LanguageMessage);
+        Assert.True(vm.ShowLanguageRetry); Assert.True(vm.RetryLanguageCommand.CanExecute(null));
+        store.Fail = false; await vm.RetryLanguageAsync();
+        Assert.Contains("Portugués", vm.LanguageMessage); Assert.False(vm.ShowLanguageRetry); Assert.Equal(0, provider.Calls);
+        await vm.StopAsync();
+    }
     private sealed class FailingStore : ISettingsStore, IOutputLanguageSettings
     {
         public bool Fail = true;
+        public Func<string, Task>? Save;
         public Task InitializeAsync(CancellationToken token = default) => Task.CompletedTask;
         public Task<AppSettings> ReadSettingsAsync(CancellationToken token = default) => Task.FromResult(new AppSettings(true, "test-model"));
         public Task SaveSettingsAsync(AppSettings settings, CancellationToken token = default) => Task.CompletedTask;
         public Task<int> ReadRequestCountAsync(DateOnly date, CancellationToken token = default) => Task.FromResult(0);
         public Task<string> ReadOutputLanguageAsync(CancellationToken token = default) => Task.FromResult("es");
-        public Task SaveOutputLanguageAsync(string language, CancellationToken token = default) => Fail ? Task.FromException(new IOException()) : Task.CompletedTask;
+        public Task SaveOutputLanguageAsync(string language, CancellationToken token = default) => Save?.Invoke(language) ?? (Fail ? Task.FromException(new IOException()) : Task.CompletedTask);
     }
 
     private sealed class Provider : ILyricsProvider, IInsightProvider

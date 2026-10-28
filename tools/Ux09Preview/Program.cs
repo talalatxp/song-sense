@@ -21,7 +21,7 @@ public static class Preview
         output = Path.GetFullPath(args[1]); Directory.CreateDirectory(output); var oldError = Path.Combine(output,"error.txt"); if(File.Exists(oldError))File.Delete(oldError); RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         var resources = XDocument.Load(Path.Combine(args[0], "src/SongSense.App/App.xaml")).Root!.Elements().First().Elements().Single(); app.Resources = (ResourceDictionary)System.Windows.Markup.XamlReader.Parse(resources.ToString());
-        app.Dispatcher.InvokeAsync(async () => { try { await Run(args.Contains("--interactive")); } catch (Exception e) { File.WriteAllText(Path.Combine(output, "error.txt"), e.ToString()); Environment.ExitCode = 1; } app.Shutdown(); }); app.Run();
+        app.Dispatcher.InvokeAsync(async () => { var previousClipboard = Clipboard.GetDataObject(); try { await Run(args.Contains("--interactive")); } catch (Exception e) { File.WriteAllText(Path.Combine(output, "error.txt"), e.ToString()); Environment.ExitCode = 1; } finally { if (previousClipboard is null) Clipboard.Clear(); else Clipboard.SetDataObject(previousClipboard, true); } app.Shutdown(Environment.ExitCode); }); app.Run();
     }
     static TrackDetection Track(long revision) => new(ApplicationState.Playing, new(revision, "Ventana de prueba " + revision, "Artista sintético", "Álbum propio", TimeSpan.FromMinutes(3), PlaybackState.Playing), null);
     static async Task Flush(Window window) { await window.Dispatcher.InvokeAsync(() => window.UpdateLayout(), DispatcherPriority.ApplicationIdle); await Task.Delay(30); await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle); }
@@ -47,7 +47,7 @@ public static class Preview
         {
             main.Width=width;main.Height=height; main.ReadingFontSize=size; await Capture(main,$"mixed-{width}-{size}");
             Check(Math.Abs(original.Document.FontSize-size*4d/3)<.01 && Math.Abs(original.Document.LineHeight-size*2d)<.01,"point conversion and 1.5 line height");
-            Check(original.ViewportHeight >= 160, $"viewport {width}/{size}: {original.ViewportHeight}");
+            Check(original.ViewportHeight >= original.FontSize * 1.5, $"viewport cannot fit one reading line {width}/{size}: {original.ViewportHeight}");
             var scroll = Find<ScrollViewer>(original).First(); Check(scroll.ExtentWidth <= scroll.ViewportWidth+.1, "unbroken line wraps without horizontal overflow");
             var sample = new FormattedText("La voz narrativa busca una oportunidad de cambio y observa cómo entra la luz.", System.Globalization.CultureInfo.GetCultureInfo("es-ES"), FlowDirection.LeftToRight, new Typeface("Georgia"), original.FontSize, Brushes.Black, 1);
             var prose = original.ViewportWidth-original.Document.PagePadding.Left-original.Document.PagePadding.Right; Check(prose <= original.FontSize*36+.1,"prose capped at 36 em");

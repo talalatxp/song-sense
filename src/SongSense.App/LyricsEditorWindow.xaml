@@ -16,15 +16,15 @@
     <Grid x:Name="VersionsGrid" Margin="2">
      <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-     <TextBlock Grid.ColumnSpan="2" Text="{Binding VersionsMessage}" TextWrapping="Wrap" FontSize="{DynamicResource UiInstructionFont}" Margin="0,0,0,10"/>
+     <TextBlock x:Name="VersionsHeading" Grid.ColumnSpan="2" Text="{Binding VersionsMessage}" TextWrapping="Wrap" FontSize="{DynamicResource UiInstructionFont}" Margin="0,0,0,10"/>
      <ListBox x:Name="VersionsList" Grid.Row="1" Grid.RowSpan="2" ItemsSource="{Binding Options}" SelectedItem="{Binding Selected}" ScrollViewer.HorizontalScrollBarVisibility="Disabled" HorizontalContentAlignment="Stretch" AutomationProperties.Name="Versiones disponibles">
       <ListBox.ItemTemplate><DataTemplate><StackPanel Margin="4">
        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="{DynamicResource UiInstructionFont}"/>
        <TextBlock Text="{Binding Details}" FontSize="{DynamicResource UiInstructionFont}" Margin="0,4,0,0"/>
       </StackPanel></DataTemplate></ListBox.ItemTemplate>
      </ListBox>
-     <ScrollViewer x:Name="VersionPreview" Grid.Row="1" Grid.Column="1" Grid.RowSpan="2" VerticalScrollBarVisibility="Auto" Margin="10,0,0,8" AutomationProperties.Name="Vista previa completa de la letra"><TextBlock Text="{Binding Preview}" FontSize="{DynamicResource UiControlFont}"/></ScrollViewer>
-     <StackPanel Grid.Row="3" Grid.ColumnSpan="2" Orientation="Horizontal"><Button x:Name="VersionBack" Content="Volver a versiones" Click="ShowVersions" Visibility="Collapsed"/><Button x:Name="PreviewNext" Content="Ver letra seleccionada" Click="ShowSelectedVersion"/><Button Content="Confirmar versión" Style="{StaticResource PrimaryButton}" Command="{Binding ConfirmCommand}" Padding="14,8" HorizontalAlignment="Left"/></StackPanel>
+     <ScrollViewer x:Name="VersionPreview" Grid.Row="1" Grid.Column="1" Grid.RowSpan="2" VerticalScrollBarVisibility="Auto" Margin="10,0,0,8" Focusable="True" KeyboardNavigation.IsTabStop="True" AutomationProperties.Name="Vista previa completa de la letra"><TextBlock Text="{Binding Preview}" FontSize="{DynamicResource UiControlFont}"/></ScrollViewer>
+     <WrapPanel Grid.Row="3" Grid.ColumnSpan="2"><Button x:Name="VersionBack" Content="Volver a versiones" Click="ShowVersions" Visibility="Collapsed" Margin="0,0,6,4"/><Button x:Name="PreviewNext" Content="Ver letra seleccionada" Click="ShowSelectedVersion" IsEnabled="{Binding CanPreviewVersion}" Margin="0,0,6,4"/><Button x:Name="ConfirmVersionButton" Content="Confirmar versión" Style="{StaticResource PrimaryButton}" Command="{Binding ConfirmCommand}" Padding="14,8" HorizontalAlignment="Left" Margin="0,0,0,4"/></WrapPanel>
     </Grid>
    </TabItem>
    <TabItem Header="Manual">

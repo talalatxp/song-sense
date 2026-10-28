@@ -1,4 +1,7 @@
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Threading;
 
 namespace SongSense.App;
 
@@ -14,7 +17,18 @@ public partial class LyricsEditorWindow : Window
         DataContext = editor;
         EditorTabs.SelectedIndex = (manual ?? editor.PreferManual) ? 1 : 0;
         editor.Committed += OnCommitted;
-        VersionsList.SelectionChanged += (_, _) => { if (ActualWidth < 640 && editor.Selected is not null) { previewStep = true; ApplyEditorLayout(); VersionPreview.Focus(); } };
+        Loaded += (_, _) => ApplyEditorLayout();
+        VersionsList.PreviewKeyDown += (_, args) =>
+        {
+            if (args.Key != Key.Enter || Keyboard.Modifiers != ModifierKeys.None || !editor.CanPreviewVersion) return;
+            ShowSelectedVersion(VersionsList, args); args.Handled = true;
+        };
+        VersionsList.MouseDoubleClick += (_, args) =>
+        {
+            if (args.ChangedButton != MouseButton.Left || args.OriginalSource is not DependencyObject source ||
+                ItemsControl.ContainerFromElement(VersionsList, source) is not ListBoxItem { IsSelected: true } || !editor.CanPreviewVersion) return;
+            ShowSelectedVersion(VersionsList, args); args.Handled = true;
+        };
 
         Closing += (_, args) =>
         {
@@ -31,14 +45,33 @@ public partial class LyricsEditorWindow : Window
         try { if (editor.ManualText.Length > 0) Clipboard.SetText(editor.ManualText); }
         catch (System.Runtime.InteropServices.COMException) { MessageBox.Show(this, "No se pudo copiar. El borrador sigue en esta ventana; vuelve a intentarlo."); }
     }
-    private bool previewStep;
-    private void ShowSelectedVersion(object sender, RoutedEventArgs args) { if (editor.Selected is null) return; previewStep = true; ApplyEditorLayout(); VersionPreview.Focus(); }
-    private void ShowVersions(object sender, RoutedEventArgs args) { previewStep = false; ApplyEditorLayout(); VersionsList.Focus(); }
+    private void ShowSelectedVersion(object sender, RoutedEventArgs args)
+    {
+        if (!editor.OpenSelectedVersion()) return;
+        ApplyEditorLayout(); VersionPreview.Focus();
+    }
+    private void ShowVersions(object sender, RoutedEventArgs args) { editor.ReturnToVersions(); ApplyEditorLayout(); FocusSelectedVersion(); }
+    private void FocusSelectedVersion()
+    {
+        Dispatcher.InvokeAsync(() =>
+        {
+            if (closed || !VersionsList.IsVisible) return;
+            if (editor.Selected is not { } selected) { VersionsList.Focus(); return; }
+            VersionsList.ScrollIntoView(selected); UpdateLayout();
+            if (VersionsList.ItemContainerGenerator.ContainerFromItem(selected) is ListBoxItem item)
+            { item.Focus(); item.BringIntoView(); }
+        }, DispatcherPriority.Loaded);
+    }
     private void AdaptEditor(object sender, SizeChangedEventArgs args) => ApplyEditorLayout();
     private void ApplyEditorLayout()
     {
-        if (VersionsList is null) return;
+        if (VersionsList is null || editor is null) return;
         var compact = ActualWidth < 640;
+        var listFocused = VersionsList.IsKeyboardFocusWithin;
+        var previewFocused = VersionPreview.IsKeyboardFocusWithin;
+        var navigationFocused = VersionBack.IsKeyboardFocusWithin || PreviewNext.IsKeyboardFocusWithin;
+        var previewStep = editor.VersionsStep == LyricsVersionsStep.Preview;
+        editor.SetVersionsComparison(!compact);
         VersionsGrid.RowDefinitions[1].Height = new GridLength(1, GridUnitType.Star);
         VersionsGrid.RowDefinitions[2].Height = new GridLength(0);
         VersionsGrid.ColumnDefinitions[0].Width = compact ? new GridLength(1, GridUnitType.Star) : new GridLength(220);
@@ -49,8 +82,10 @@ public partial class LyricsEditorWindow : Window
         System.Windows.Controls.Grid.SetRowSpan(VersionPreview, 1);
         VersionsList.Visibility = compact && previewStep ? Visibility.Collapsed : Visibility.Visible;
         VersionPreview.Visibility = !compact || previewStep ? Visibility.Visible : Visibility.Collapsed;
+        VersionPreview.Margin = compact ? new Thickness(0, 0, 0, 8) : new Thickness(10, 0, 0, 8);
         PreviewNext.Visibility = compact && !previewStep ? Visibility.Visible : Visibility.Collapsed;
-        PreviewNext.IsEnabled = editor.Selected is not null;
         VersionBack.Visibility = compact && previewStep ? Visibility.Visible : Visibility.Collapsed;
+        if (listFocused && !VersionsList.IsVisible) VersionPreview.Focus();
+        else if (previewFocused && !VersionPreview.IsVisible || navigationFocused && !compact) FocusSelectedVersion();
     }
 }

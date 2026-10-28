@@ -2,7 +2,7 @@
 
 Aplicación para Windows que detecta la canción de Spotify, busca su letra y permite traducirla y obtener una interpretación con IA. Guarda letras y resultados en el equipo y ofrece traducción y explicaciones en español, inglés, francés, alemán, italiano y portugués.
 
-Versión preliminar: `0.14.0-preview.1`. La integración con proveedores reales y la aceptación completa de accesibilidad siguen pendientes de validación. Las interpretaciones de IA pueden contener errores.
+Versión preliminar del código: `0.14.0-preview.2`. La integración con proveedores reales y la aceptación completa de accesibilidad siguen pendientes de validación. Las interpretaciones de IA pueden contener errores.
 
 ## Ejecutar la aplicación
 

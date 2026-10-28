@@ -34,14 +34,7 @@
     </ControlTemplate></Button.Template>
     <TextBlock Text="{Binding AiDecisionLabel}" FontSize="{DynamicResource UiControlFont}" TextWrapping="Wrap"/>
    </Button>
-  <Expander x:Name="ReadingActions" Header="Acciones y estado" IsExpanded="True"><StackPanel>  <WrapPanel Margin="0,0,0,4">
-   <TextBlock Text="{Binding PlaybackStatus}" FontSize="{DynamicResource UiInstructionFont}" Foreground="{DynamicResource Muted}" Margin="0,0,8,0" AutomationProperties.AutomationId="PlaybackStatus"/>
-   <TextBlock Text="{Binding TrackingStatus}" FontSize="{DynamicResource UiInstructionFont}" Foreground="{DynamicResource Muted}" Margin="0,0,8,0" AutomationProperties.AutomationId="TrackingStatus"/>
-  </WrapPanel><DockPanel>
-   <TextBlock x:Name="UsageBadge" DockPanel.Dock="Right" Text="{Binding CompactUsage}" ToolTip="{Binding UsageMessage}" TextWrapping="Wrap" MaxWidth="220" FontSize="{DynamicResource UiInstructionFont}" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" AutomationProperties.Name="Consumo de la consulta de IA"/>
-   <WrapPanel>
-    <Button Content="{Binding PrimaryActionLabel}" Click="ExecutePrimaryAction" IsEnabled="{Binding CanPrimaryAction}" AutomationProperties.AutomationId="PrimaryAction" Padding="10,6" FontSize="{DynamicResource UiControlFont}" Margin="0,0,6,0"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}"><Style.Triggers><DataTrigger Binding="{Binding ShowPrimaryAction}" Value="False"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
-    <Button Content="Reanudar" Command="{Binding ResumeTrackingCommand}" ToolTip="Reanudar seguimiento" AutomationProperties.Name="Reanudar seguimiento" AutomationProperties.AutomationId="ResumeTracking" Padding="10,6" FontSize="{DynamicResource UiControlFont}" Margin="0,0,6,0"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource QuietButton}"><Style.Triggers><DataTrigger Binding="{Binding CanResumeTracking}" Value="False"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
+   <DockPanel Margin="0,0,0,4" LastChildFill="True">
     <Button x:Name="ApplicationMenuButton" Content="⋯" Click="OpenSongMenu" Style="{StaticResource QuietButton}" Padding="10,4" AutomationProperties.Name="Menú de Song Sense y acciones de la canción">
      <Button.ContextMenu><ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
       <MenuItem Header="Detalles de la canción…" Click="OpenSongDetails"/>
@@ -53,8 +46,16 @@
       <Separator/><MenuItem Header="Acerca de Song Sense" Click="ShowAbout"/><MenuItem Header="Salir de Song Sense" Click="ExitApplication"/>
      </ContextMenu></Button.ContextMenu>
     </Button>
-   </WrapPanel>
-  </DockPanel></StackPanel></Expander></StackPanel>
+    <Button x:Name="PrimaryActionButton" Content="{Binding PrimaryActionLabel}" Click="ExecutePrimaryAction" IsEnabled="{Binding CanPrimaryAction}" HorizontalAlignment="Left" AutomationProperties.AutomationId="PrimaryAction" Padding="10,6" FontSize="{DynamicResource UiControlFont}" Margin="0,0,6,0"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}"><Style.Triggers><DataTrigger Binding="{Binding ShowPrimaryAction}" Value="False"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Button.Style><Button.ContentTemplate><DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap"/></DataTemplate></Button.ContentTemplate></Button>
+   </DockPanel>
+   <Expander x:Name="ReadingActions" Header="Acciones y estado" IsExpanded="True"><StackPanel>
+    <WrapPanel Margin="0,0,0,4">
+     <TextBlock Text="{Binding PlaybackStatus}" FontSize="{DynamicResource UiInstructionFont}" Foreground="{DynamicResource Muted}" Margin="0,0,8,0" AutomationProperties.AutomationId="PlaybackStatus"/>
+     <TextBlock Text="{Binding TrackingStatus}" FontSize="{DynamicResource UiInstructionFont}" Foreground="{DynamicResource Muted}" Margin="0,0,8,0" AutomationProperties.AutomationId="TrackingStatus"/>
+    </WrapPanel>
+    <TextBlock x:Name="UsageBadge" Text="{Binding CompactUsage}" ToolTip="{Binding UsageMessage}" TextWrapping="Wrap" FontSize="{DynamicResource UiInstructionFont}" Foreground="{DynamicResource Muted}" AutomationProperties.Name="Consumo de la consulta de IA"/>
+    <Button Content="Reanudar" Command="{Binding ResumeTrackingCommand}" HorizontalAlignment="Left" ToolTip="Reanudar seguimiento" AutomationProperties.Name="Reanudar seguimiento" AutomationProperties.AutomationId="ResumeTracking" Padding="10,6" FontSize="{DynamicResource UiControlFont}"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource QuietButton}"><Style.Triggers><DataTrigger Binding="{Binding CanResumeTracking}" Value="False"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
+   </StackPanel></Expander></StackPanel>
   <StackPanel Grid.Row="3" Margin="0,0,0,4"><ui:StatusNotice AnnouncementScope="{Binding Preparation.Cause}" Visibility="{Binding ShowPreparationNotice, Converter={StaticResource BoolVis}}" Message="{Binding PreparationNoticeDetails}" Summary="{Binding PreparationSummary}" Kind="{Binding DisplayNoticeKind}" FontSize="{DynamicResource UiInstructionFont}"/>
   </StackPanel>
    <Grid Grid.Row="4">
@@ -77,7 +78,11 @@
      </Border>
     </TabItem>
    </TabControl>
-   <DockPanel><StackPanel DockPanel.Dock="Left"><TextBlock Text="Idioma de lectura" FontSize="{DynamicResource UiInstructionFont}"/><TextBlock Text="Traducción y explicación" FontSize="{DynamicResource UiSecondaryFont}"/></StackPanel><ComboBox x:Name="ReadingLanguage" ItemsSource="{Binding AvailableLanguages}" DisplayMemberPath="Name" SelectedValuePath="Code" SelectedValue="{Binding TargetLanguage, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanChangeLanguage}" HorizontalAlignment="Right" VerticalAlignment="Top" MinWidth="110" Padding="6,4" FontSize="{DynamicResource UiControlFont}" AutomationProperties.Name="Idioma de lectura · traducción y explicación" AutomationProperties.ItemStatus="{Binding SelectedItem.Name, RelativeSource={RelativeSource Self}}"/></DockPanel>
+   <StackPanel>
+    <DockPanel><StackPanel DockPanel.Dock="Left" ToolTip="Idioma de traducción y explicación"><TextBlock Text="Idioma de lectura" FontSize="{DynamicResource UiInstructionFont}"/><TextBlock Text="Traducción y explicación" FontSize="{DynamicResource UiSecondaryFont}"><TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}"><Style.Triggers><DataTrigger Binding="{Binding IsCompactLayout, RelativeSource={RelativeSource AncestorType=Window}}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock></StackPanel><ComboBox x:Name="ReadingLanguage" ItemsSource="{Binding AvailableLanguages}" DisplayMemberPath="Name" SelectedValuePath="Code" SelectedValue="{Binding TargetLanguage, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanChangeLanguage}" HorizontalAlignment="Right" VerticalAlignment="Top" MinWidth="110" Padding="6,4" FontSize="{DynamicResource UiControlFont}" AutomationProperties.Name="Idioma de lectura · traducción y explicación" AutomationProperties.ItemStatus="{Binding SelectedItem.Name, RelativeSource={RelativeSource Self}}"/></DockPanel>
+    <ui:StatusNotice x:Name="LanguageStatus" Margin="0,4,0,4" Visibility="{Binding ShowLanguageMessage, Converter={StaticResource BoolVis}}" Message="{Binding LanguageMessage}" Summary="{Binding LanguageSummary}" Kind="{Binding LanguageNoticeKind}" AnnouncementScope="{Binding TargetLanguage}" FontSize="{DynamicResource UiInstructionFont}"/>
+    <Button Content="Reintentar guardado de idioma" Command="{Binding RetryLanguageCommand}" HorizontalAlignment="Left" FontSize="{DynamicResource UiControlFont}"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource QuietButton}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ShowLanguageRetry}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
+   </StackPanel>
    </Grid>
  <TextBlock x:Name="UsageFooter" Grid.Row="5" Text="{Binding CompactUsage}" ToolTip="{Binding UsageMessage}" FontSize="{DynamicResource UiInstructionFont}" Foreground="{DynamicResource Muted}" Margin="0,4,0,0" AutomationProperties.Name="Consumo de la consulta de IA"><TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsCompactLayout, RelativeSource={RelativeSource AncestorType=Window}}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger><Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed"/></Trigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
 </Grid></ScrollViewer></Window>

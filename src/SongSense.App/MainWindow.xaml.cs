@@ -67,7 +67,7 @@ public partial class MainWindow : Window
             try { await vm.RefreshPreparationTimeAsync(); }
             finally { refreshing = false; }
         };
-        Loaded += (_, _) => preparationTimer.Start();
+        Loaded += (_, _) => { ApplyReadingLayout(); preparationTimer.Start(); };
         Closed += (_, _) => preparationTimer.Stop();
     }
     private async void ExecutePrimaryAction(object sender, RoutedEventArgs args)
@@ -112,11 +112,18 @@ public partial class MainWindow : Window
     }
     private void AdaptReadingLayout(object sender, SizeChangedEventArgs args)
         => ApplyReadingLayout();
+    private bool readingActionsInitialized;
     private void ApplyReadingLayout()
     {
         if (ReadingTabs is null) return;
         var compact = ActualWidth < 600;
-        if (IsCompactLayout != compact) ReadingActions.IsExpanded = !compact;
+        // Choose a default once, after the opening geometry has been restored.
+        // Subsequent resizing must preserve the user's choice for this window.
+        if (IsLoaded && !readingActionsInitialized)
+        {
+            ReadingActions.IsExpanded = !compact;
+            readingActionsInitialized = true;
+        }
         IsCompactLayout = compact;
         BrandText.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         UsageBadge.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;

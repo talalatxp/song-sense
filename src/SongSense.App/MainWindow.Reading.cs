@@ -69,7 +69,7 @@ public partial class MainWindow
     private Paragraph AddText(ReadingDocument view, string text, bool label = false)
     {
         var paragraph = new Paragraph(new Run(text));
-        if (label) { paragraph.Tag = "metadata"; paragraph.FontFamily = new System.Windows.Media.FontFamily("Segoe UI"); paragraph.FontSize = 12; paragraph.LineHeight = 18; paragraph.SetResourceReference(ForegroundProperty, "Muted"); }
+        if (label) { paragraph.Tag = "metadata"; ReadingDocument.SetTextRole(paragraph, ReadingTextRole.Secondary); paragraph.SetResourceReference(ForegroundProperty, "Muted"); }
         view.Document.Blocks.Add(paragraph);
         return paragraph;
     }
@@ -101,7 +101,7 @@ public partial class MainWindow
         else
         {
             var identity = AddText(MeaningScroll, "Una interpretación posible, generada por IA", true);
-            identity.FontSize = 14; identity.LineHeight = 21; identity.FontWeight = FontWeights.SemiBold;
+            ReadingDocument.SetTextRole(identity, ReadingTextRole.Heading);
             identity.SetResourceReference(TextElement.ForegroundProperty, "Ink");
             AddHeader(MeaningScroll);
             meaningPresentation = new MeaningPresentation(MeaningScroll, vm.Insight!);

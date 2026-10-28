@@ -1,4 +1,5 @@
 using SongSense.Core;
+using SongSense.Infrastructure;
 namespace SongSense.App;
 public sealed partial class ConnectionViewModel
 {
@@ -17,7 +18,7 @@ public sealed partial class ConnectionViewModel
     public string StepTitle => Step switch { 1 => "1 · Conectar cuenta", 2 => "2 · Elegir modelo", 3 => "3 · Habilitar esta sesión", 4 => "Sesión preparada", _ => "API de pago seleccionada" };
     public string SessionSummary => IsApiMode ? "La clave y el modelo de API se configuran en Ajustes de API. No se utiliza el modelo de ChatGPT." : $"Cuenta: {Account}\nModelo guardado: {connection.Model ?? "sin elegir"}";
     public string ModeDescription => IsApiMode ? "Modo activo: API de pago. Usa facturación de API independiente de la suscripción. No se envía una prueba al elegir este modo." : "Modo activo: ChatGPT. Requiere permiso del plan y confirmación de créditos desactivados en cada sesión. Elegir el modo no genera análisis.";
-    public string PrimaryLabel => Step switch { 1 => connection.HasPendingRegistration ? "Continuar registro pendiente" : "Continuar con ChatGPT", 2 => Models.Count == 0 ? "Consultar modelos" : "Guardar modelo seleccionado", 3 => "Habilitar consultas con mi plan", 4 => "Volver a lectura", _ => "Abrir ajustes de API de pago" };
+    public string PrimaryLabel => Step switch { 1 => connection.HasPendingRegistration ? "Continuar registro pendiente" : "Continuar con ChatGPT", 2 => Models.Count == 0 ? CatalogState == ModelCatalogState.NotRequested ? "Consultar modelos" : "Consultar de nuevo" : "Guardar modelo seleccionado", 3 => "Habilitar consultas con mi plan", 4 => "Volver a lectura", _ => "Abrir ajustes de API de pago" };
     public bool CanPrimary => CanManage && (Step != 2 || Models.Count == 0 || CanSaveModel) && (Step != 3 || CanEnablePlan);
     public string PrimaryReason => busy ? Operation switch
     {

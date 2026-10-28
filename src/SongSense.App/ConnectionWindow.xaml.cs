@@ -8,10 +8,11 @@ public partial class ConnectionWindow : Window
     private readonly ConnectionViewModel viewModel;
     private bool closing, canClose;
     public Action? OpenApiSettingsAction { get; init; }
+    public Action<Uri>? OpenUsagePage { get; init; }
     public void FocusPreparationStep(PreparationAction action) => Dispatcher.InvokeAsync(() =>
     {
         viewModel.Review(action == PreparationAction.ChooseModel ? 2 : action == PreparationAction.ReviewPlan ? 3 : 1);
-        FrameworkElement target = viewModel.IsConfirmStep ? CreditsConfirmation : NextButton;
+        FrameworkElement target = viewModel.IsConfirmStep ? ManageUsageButton : NextButton;
         target.BringIntoView(); target.Focus();
     }, System.Windows.Threading.DispatcherPriority.Loaded);
     public ConnectionWindow(ConnectionViewModel viewModel)
@@ -40,7 +41,7 @@ public partial class ConnectionWindow : Window
     private async void UseApiKey(object sender, RoutedEventArgs args) => await viewModel.ModeAsync(AiConnectionMode.ApiKey);
     private void OpenApiSettings(object sender, RoutedEventArgs args) => OpenApiSettingsAction?.Invoke();
     private void ManageUsage(object sender, RoutedEventArgs args)
-    { try { ConnectionViewModel.ManageUsage(); } catch (Exception) { MessageBox.Show(this, "No se pudo abrir el navegador. Abre ChatGPT y entra en Ajustes → Uso.", "Gestionar uso"); } }
+    { try { if (OpenUsagePage is { } open) open(ConnectionViewModel.UsagePage); else ConnectionViewModel.ManageUsage(); } catch (Exception) { MessageBox.Show(this, "No se pudo abrir el navegador. Abre ChatGPT y entra en Ajustes → Uso.", "Gestionar uso"); } }
     private void CancelOperation(object sender, RoutedEventArgs args) => viewModel.Cancel();
     private async void NextStep(object sender, RoutedEventArgs args)
     {

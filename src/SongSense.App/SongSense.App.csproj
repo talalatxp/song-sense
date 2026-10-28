@@ -7,10 +7,10 @@
     <!-- WPF uses the existing PerMonitorV2 manifest; no WinForms ApplicationConfiguration startup. -->
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
     <AssemblyName>SongSense</AssemblyName>
-    <Version>0.14.0-preview.1</Version>
+    <Version>0.14.0-preview.2</Version>
     <AssemblyVersion>0.14.0.0</AssemblyVersion>
-    <FileVersion>0.14.0.2</FileVersion>
-    <InformationalVersion>0.14.0-preview.1+a2-11.20261027.1</InformationalVersion>
+    <FileVersion>0.14.0.3</FileVersion>
+    <InformationalVersion>0.14.0-preview.2+a3-09.20261028.1</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets/SongSense.ico</ApplicationIcon>

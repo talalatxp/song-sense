@@ -41,7 +41,8 @@ public sealed partial class MainViewModel
         ContentReadiness.NoLyrics or ContentReadiness.Versions => "Aquí aparecerá la letra que encuentres o confirmes.",
         ContentReadiness.Lyrics => "La letra original está disponible para leer.", _ => ""
     };
-    public bool ShowPreparationNotice => Preparation.Cause is not (PreparationCause.Ready or PreparationCause.Result) || Preparation.Kind != NoticeKind.Success || Preparation.Blockers.Count > 0;
+    public bool ShowPreparationNotice => !(ShowLanguageMessage && Preparation.Cause is PreparationCause.LanguageSaving or PreparationCause.LanguageFailed) &&
+        (Preparation.Cause is not (PreparationCause.Ready or PreparationCause.Result) || Preparation.Kind != NoticeKind.Success || Preparation.Blockers.Count > 0);
     public string PreparationNoticeDetails => ShowDiagnostic || Preparation.Cause == PreparationCause.Result && Preparation.Blockers.Count > 0 ? DiagnosticDetails : Preparation.Message;
     public string PreparationSummary => Preparation.Cause switch
     {

@@ -474,6 +474,77 @@ public sealed class AiConfigurationTests : IDisposable
         Assert.Equal(vm.Message, summary);
         Assert.Equal(NoticeKind.Information, vm.MessageKind); Assert.True(vm.CanTest); Assert.Equal(0, handler.Calls);
     }
+    public static IEnumerable<object[]> DraftTransitionMatrix()
+    {
+        foreach (var configured in new[] { false, true })
+        foreach (var chat in new[] { false, true })
+        foreach (var newKey in new[] { false, true })
+        foreach (var field in new[] { "Model", "Limit" }) yield return [configured, chat, newKey, field];
+    }
+    [Theory]
+    [MemberData(nameof(DraftTransitionMatrix))]
+    public async Task DraftInstructionAlwaysFollowsInvalidCorrectedRestoredAndInvalidAgain(bool configured, bool chat, bool newKey, string field)
+    {
+        var (service, store, handler) = await SetupAsync(); if (configured) await EnableAsync(service);
+        var persisted = await store.ReadSettingsAsync();
+        var ciphertext = File.Exists(KeyPath) ? await File.ReadAllBytesAsync(KeyPath) : null;
+        var mode = new FormSession(); if (chat) mode.Change(AiConnectionMode.ChatGptIncluded);
+        using var vm = new AiSettingsViewModel(service, CancellationToken.None, analysisSession: mode); await vm.InitializeAsync();
+        using var key = Secure(newKey ? "synthetic-replacement" : ""); vm.KeyEdited(key);
+        var initial = field == "Model" ? vm.Model : vm.Limit;
+        void Edit(string value) { if (field == "Model") vm.Model = value; else vm.Limit = value; }
+        Edit(field == "Model" ? "bad model" : "0"); await vm.SaveAsync(key);
+        Assert.False(vm.IsDraftValid); Assert.Equal(field, vm.FirstInvalidField); Assert.Contains("inválido", vm.FormInstruction); Assert.False(vm.CanTest);
+        Edit(field == "Model" ? "corrected-model" : "30");
+        Assert.True(vm.IsDraftValid); Assert.Null(vm.FirstInvalidField); Assert.True(vm.HasChanges); Assert.Contains("Guarda", vm.FormInstruction); Assert.False(vm.CanTest);
+        Edit(initial);
+        Assert.True(vm.IsDraftValid); Assert.Equal(newKey, vm.HasChanges); Assert.Equal(configured && !chat && !newKey, vm.CanTest);
+        if (newKey) Assert.Contains("Guarda", vm.FormInstruction);
+        else { Assert.Contains("Sin cambios pendientes", vm.FormInstruction); Assert.DoesNotContain("Guarda antes", vm.Message); }
+        Edit(field == "Model" ? "invalid again" : "101");
+        Assert.False(vm.IsDraftValid); Assert.Equal(field, vm.FirstInvalidField); Assert.Equal(NoticeKind.Error, vm.FormNoticeKind);
+        Assert.DoesNotContain("Corrección preparada", vm.Message); Assert.True(vm.CanManage);
+        Assert.Equal(persisted, await store.ReadSettingsAsync()); Assert.Equal(0, handler.Calls); Assert.False(vm.HasOperationResult);
+        if (ciphertext is null) Assert.False(File.Exists(KeyPath)); else Assert.Equal(ciphertext, await File.ReadAllBytesAsync(KeyPath));
+    }
+    [Fact]
+    public async Task HistoricalProbeResultRemainsSeparateFromCurrentDraftAndBlockedProbe()
+    {
+        var (service, _, handler) = await SetupAsync(); await EnableAsync(service);
+        using var vm = new AiSettingsViewModel(service, CancellationToken.None); await vm.InitializeAsync(); await vm.TestAsync();
+        var result = vm.LastOperationMessage; Assert.Contains("Conexión válida", result); Assert.Contains("chosen-model", vm.LastOperationTitle);
+        Assert.True(vm.HasOperationResult); Assert.Equal(NoticeKind.Success, vm.LastOperationKind);
+        vm.Model = "other-model"; Assert.Contains("Guarda", vm.FormInstruction); Assert.DoesNotContain("Conexión válida", vm.Message);
+        await vm.TestAsync(); Assert.Equal(1, handler.Calls); Assert.Equal(result, vm.LastOperationMessage);
+        vm.Model = "bad model"; Assert.False(vm.IsDraftValid); Assert.Contains("inválido", vm.FormInstruction);
+        vm.Model = "chosen-model"; Assert.False(vm.HasChanges); Assert.True(vm.CanTest); Assert.Contains("Sin cambios", vm.Message);
+        Assert.Equal(result, vm.LastOperationMessage); Assert.Equal(1, handler.Calls);
+    }
+    [Theory]
+    [InlineData("model", false)] [InlineData("limit", false)] [InlineData("key", true)] [InlineData("combined", true)]
+    public async Task DiscardMessageNamesOnlyActualChangesAndNeverTheKeyValue(string change, bool newKey)
+    {
+        var (service, _, handler) = await SetupAsync(); await EnableAsync(service);
+        using var vm = new AiSettingsViewModel(service, CancellationToken.None); await vm.InitializeAsync();
+        if (change is "model" or "combined") vm.Model = "draft-model";
+        if (change is "limit" or "combined") vm.Limit = "25";
+        using var key = Secure(newKey ? "synthetic-replacement" : ""); vm.KeyEdited(key);
+        Assert.True(vm.HasChanges); Assert.Equal(newKey, vm.HasDraftKey);
+        var text = vm.DiscardChangesMessage;
+        Assert.Equal(change is "model" or "combined", text.Contains("modelo"));
+        Assert.Equal(change is "limit" or "combined", text.Contains("límite diario"));
+        Assert.Equal(newKey, text.Contains("clave nueva")); Assert.Equal(newKey, text.Contains("clave guardada en este dispositivo se conserva"));
+        Assert.DoesNotContain("synthetic-replacement", text); Assert.Equal(0, handler.Calls);
+    }
+    [Fact]
+    public async Task SecureKeyDraftValidityTracksCurrentContentsWithoutExposingThem()
+    {
+        var (service, _, handler) = await SetupAsync(); using var vm = new AiSettingsViewModel(service, CancellationToken.None); await vm.InitializeAsync();
+        using var invalid = Secure("synthetic invalid"); vm.KeyEdited(invalid);
+        Assert.False(vm.IsDraftValid); Assert.DoesNotContain("synthetic invalid", vm.Message);
+        using var valid = Secure("synthetic-valid"); vm.KeyEdited(valid); Assert.True(vm.IsDraftValid);
+        using var empty = new SecureString(); vm.KeyEdited(empty); Assert.False(vm.HasChanges); Assert.Equal(0, handler.Calls);
+    }
     private sealed class FormSession : IAnalysisSession
     {
         public AiConnectionMode Mode { get; private set; } = AiConnectionMode.ApiKey;
