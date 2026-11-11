@@ -11,6 +11,8 @@ public partial class PreferencesWindow : Window
         TopmostToggle.Checked += (_, _) => main.SchedulePreferenceSave(); TopmostToggle.Unchecked += (_, _) => main.SchedulePreferenceSave();
         Closed += (_, _) => main.SavePreferences();
     }
+    private void AdaptLayout(object sender, SizeChangedEventArgs args)
+    { if (PreferencesContent is null) return; UiLayout.SetIsCompact(this, ActualWidth < 600); PreferencesContent.Margin = new Thickness(ActualWidth < 600 ? 12 : 24); }
     private async void DeleteSong(object s, RoutedEventArgs e) => await main.ConfirmDeletionAsync(false);
     private async void DeleteAll(object s, RoutedEventArgs e) => await main.ConfirmDeletionAsync(true);
     private void Diagnostic(object s, RoutedEventArgs e) => main.ShowDiagnostic();

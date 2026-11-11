@@ -6,11 +6,18 @@ using System.Windows.Input;
 
 namespace SongSense.App;
 
+public enum ReadingSpaceRole { Inherited, Title, Provenance, FirstHeading, SectionHeading, Body, DetailEntry }
+
 public enum ReadingTextRole { Inherited, Content, Heading, Navigation, Secondary }
 
 /// <summary>A single native selection surface and scroll owner for each reading tab.</summary>
 public sealed partial class ReadingDocument : RichTextBox
 {
+    public static readonly DependencyProperty SpaceRoleProperty = DependencyProperty.RegisterAttached("SpaceRole", typeof(ReadingSpaceRole), typeof(ReadingDocument), new PropertyMetadata(ReadingSpaceRole.Inherited));
+    public static void SetSpaceRole(DependencyObject target, ReadingSpaceRole role) => target.SetValue(SpaceRoleProperty, role);
+    public static ReadingSpaceRole GetSpaceRole(DependencyObject target) => (ReadingSpaceRole)target.GetValue(SpaceRoleProperty);
+    public static readonly DependencyProperty ContentInsetProperty = DependencyProperty.Register(nameof(ContentInset), typeof(double), typeof(ReadingDocument), new PropertyMetadata(4d, UiSizeChanged));
+    public double ContentInset { get => (double)GetValue(ContentInsetProperty); set => SetValue(ContentInsetProperty, value); }
     public static readonly DependencyProperty TextRoleProperty = DependencyProperty.RegisterAttached("TextRole", typeof(ReadingTextRole), typeof(ReadingDocument), new PropertyMetadata(ReadingTextRole.Inherited));
     public static void SetTextRole(DependencyObject target, ReadingTextRole role) => target.SetValue(TextRoleProperty, role);
     public static ReadingTextRole GetTextRole(DependencyObject target) => (ReadingTextRole)target.GetValue(TextRoleProperty);
@@ -31,6 +38,7 @@ public sealed partial class ReadingDocument : RichTextBox
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
         HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
         BorderThickness = new Thickness(0);
+        Padding = new Thickness(0);
         Background = Brushes.Transparent;
         SetResourceReference(ForegroundProperty, "Ink");
         SetResourceReference(SelectionBrushProperty, "Gold");
@@ -59,12 +67,24 @@ public sealed partial class ReadingDocument : RichTextBox
         Document.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
         // Reserve the native vertical scrollbar; center prose at at most 36 em.
         var available = ViewportWidth > 0 ? ViewportWidth : Math.Max(0, ActualWidth - SystemParameters.VerticalScrollBarWidth);
-        var inset = Math.Max(4, (available - FontSize * 36) / 2);
-        Document.PagePadding = new Thickness(inset, 4, inset, 8);
+        var inset = Math.Max(ContentInset, (available - FontSize * 36) / 2);
+        Document.PagePadding = new Thickness(inset, ContentInset, inset, ContentInset);
         foreach (var block in TypographyBlocks(Document.Blocks))
             ApplyBlockTypography(block);
-        foreach (var paragraph in Paragraphs(Document.Blocks))
-            paragraph.Margin = Equals(paragraph.Tag, "metadata") ? new Thickness(0) : new Thickness(0, 0, 0, FontSize * .75);
+        foreach (var block in TypographyBlocks(Document.Blocks))
+        {
+            var role = GetSpaceRole(block);
+            if (role != ReadingSpaceRole.Inherited) block.Margin = role switch
+            {
+                ReadingSpaceRole.Title => new Thickness(0, 0, 0, 8),
+                ReadingSpaceRole.Provenance => new Thickness(0, 0, 0, 16),
+                ReadingSpaceRole.FirstHeading => new Thickness(0, 0, 0, 8),
+                ReadingSpaceRole.SectionHeading => new Thickness(0, 24, 0, 8),
+                ReadingSpaceRole.DetailEntry => new Thickness(0, 16, 0, 0),
+                _ => new Thickness(0)
+            };
+            else if (block is Paragraph) block.Margin = Equals(block.Tag, "metadata") ? new Thickness(0) : new Thickness(0, 0, 0, FontSize * .75);
+        }
         TypographyChanged?.Invoke(this, EventArgs.Empty);
     }
     internal void ApplyBlockTypography(Block block)

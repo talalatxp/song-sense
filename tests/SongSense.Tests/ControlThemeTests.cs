@@ -29,13 +29,13 @@ public sealed class ControlThemeTests
         thread.SetApartmentState(ApartmentState.STA); thread.Start(); thread.Join();
         if (error is not null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(error).Throw();
     }
-    private static Window Host(Control control)
+    private static Window Host(FrameworkElement control)
     {
         var window = new Window { Width = 500, Height = 300, Content = control };
         ThemeResources.Apply(window.Resources, false);
         window.Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri("pack://application:,,,/SongSense;component/Themes/Controls.xaml") });
         window.Measure(new Size(500, 300)); window.Arrange(new Rect(0, 0, 500, 300)); window.UpdateLayout();
-        control.ApplyTemplate();
+        if (control is Control templated) templated.ApplyTemplate();
         control.Measure(new Size(450, 250)); control.Arrange(new Rect(0, 0, 450, 250)); control.UpdateLayout();
         return window;
     }
@@ -108,7 +108,7 @@ public sealed class ControlThemeTests
         var notice = new StatusNotice { Kind = kind, Message = "Mensaje de prueba" }; Host(notice);
         var peer = UIElementAutomationPeer.CreatePeerForElement(notice)!;
         Assert.Equal(label + ": Mensaje de prueba", peer.GetName());
-        Assert.Contains(Descendants(notice).OfType<TextBlock>(), item => item.Name == "Symbol" && item.Text.Length > 0);
+        Assert.Contains(Descendants(notice).OfType<System.Windows.Shapes.Path>(), item => item.Name == "Symbol" && item.Data is not null && !item.Focusable);
     });
     [Fact]
     public void LongNoticeUpdatesItsPrefixAndMessageAsOneTextValue() => Sta(() =>
@@ -177,6 +177,77 @@ public sealed class ControlThemeTests
         var range = Assert.IsAssignableFrom<IRangeValueProvider>(new SliderAutomationPeer(slider).GetPattern(PatternInterface.RangeValue));
         range.SetValue(17); Assert.Equal(17, slider.Value);
         Assert.Equal(17, ((Track)slider.Template.FindName("PART_Track", slider)).Value);
+    });
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public void SelectedTabAccentDoesNotMakeItsBodyUnreadable(bool highContrast) => Sta(() =>
+    {
+        var text = new TextBlock { Text = "Lectura conservada al cambiar de pestaña" };
+        var tabs = new TabControl(); tabs.Items.Add(new TabItem { Header = "Letra", Content = text }); tabs.SelectedIndex = 0;
+        var window = Host(tabs); ThemeResources.Apply(window.Resources, highContrast); window.UpdateLayout();
+        Assert.Equal(((SolidColorBrush)window.FindResource("Ink")).Color, ((SolidColorBrush)text.Foreground).Color);
+        Assert.True(((TabItem)tabs.Items[0]).IsSelected);
+    });
+    [Fact]
+    public void ActionRowsWrapWithoutLosingOrderOrGapsWhenAnActionDisappears() => Sta(() =>
+    {
+        var row = new ActionPanel { Width = 210 };
+        var buttons = Enumerable.Range(0, 3).Select(i => new Button { Content = "Acción " + i, Width = 100 }).ToArray();
+        foreach (var button in buttons) row.Children.Add(button);
+        Host(row); row.Measure(new Size(210, 500)); row.Arrange(new Rect(0, 0, 210, row.DesiredSize.Height));
+        var first = buttons[0].TranslatePoint(new Point(), row); var second = buttons[1].TranslatePoint(new Point(), row);
+        var third = buttons[2].TranslatePoint(new Point(), row);
+        Assert.True(second.X >= first.X + buttons[0].ActualWidth + 8);
+        Assert.True(third.Y >= first.Y + buttons[0].ActualHeight + 8);
+        buttons[0].Visibility = Visibility.Collapsed; row.UpdateLayout();
+        row.Measure(new Size(210, 500)); row.Arrange(new Rect(0, 0, 210, row.DesiredSize.Height));
+        Assert.Equal(0, buttons[1].TranslatePoint(new Point(), row).X);
+    });
+    [Fact]
+    public void NoticeActionCanBeAddedAndRemovedWithoutLosingSelectableDetailOrMessage() => Sta(() =>
+    {
+        var notice = new StatusNotice { Explanation = "Revisa el almacenamiento local antes de reintentar.", Summary = "No se guardó", Message = "El borrador sigue disponible para reintentar sin perder texto." };
+        Host(notice); var action = new Button { Content = "Reintentar" }; notice.ActionContent = action; notice.UpdateLayout();
+        Assert.True(notice.HasAction);
+        Assert.Contains(Descendants(notice).OfType<TextBlock>(), text => text.Text == notice.Explanation);
+        Assert.Equal(action, ((ContentPresenter)notice.Template.FindName("NoticeAction", notice)).Content);
+        var detail = (Expander)notice.Template.FindName("NoticeDetail", notice); detail.IsExpanded = true; notice.UpdateLayout();
+        Assert.Contains(Descendants(detail).OfType<TextBox>(), box => box.Text == notice.Message && box.IsReadOnly);
+        notice.ActionContent = null; notice.UpdateLayout(); Assert.False(notice.HasAction); Assert.True(detail.IsExpanded);
+        Assert.Contains(notice.Message, UIElementAutomationPeer.CreatePeerForElement(notice)!.GetName());
+    });
+    [Fact]
+    public void MessagePresentationKeepsFullAccessibleTextAndExistingActionAndDetail() => Sta(() =>
+    {
+        var action = new Button { Content = "Reintentar" };
+        var notice = new StatusNotice { Message = "Texto completo que explica la causa y cómo continuar.", Summary = "Revisa la operación.", ActionContent = action };
+        Host(notice);
+        var detail = (Expander)notice.Template.FindName("NoticeDetail", notice);
+        detail.IsExpanded = true;
+        notice.Presentation = NoticePresentation.Contextual; notice.UpdateLayout();
+        Assert.Same(detail, notice.Template.FindName("NoticeDetail", notice)); Assert.True(detail.IsExpanded);
+        Assert.Equal(Visibility.Collapsed, ((FrameworkElement)notice.Template.FindName("NoticeIconColumn", notice)).Visibility);
+        Assert.Equal(notice.Message, UIElementAutomationPeer.CreatePeerForElement(notice)!.GetName());
+        notice.Presentation = NoticePresentation.Routine; notice.UpdateLayout();
+        Assert.False(notice.HasDetails); Assert.Equal(notice.Message, notice.DisplayText);
+        Assert.Same(action, notice.ActionContent);
+        notice.Presentation = NoticePresentation.Attention; notice.Kind = NoticeKind.Error; notice.UpdateLayout();
+        Assert.True(notice.HasDetails); Assert.True(detail.IsExpanded);
+        Assert.Equal(Visibility.Visible, ((FrameworkElement)notice.Template.FindName("NoticeIconColumn", notice)).Visibility);
+        Assert.StartsWith("Error:", notice.DisplayText);
+    });
+    [Fact]
+    public void FieldErrorsUseSemanticBorderAndClearWithoutChangingInput() => Sta(() =>
+    {
+        var field = new TextBox { Text = "invalid model" }; Host(field);
+        var original = field.BorderBrush;
+        UiState.SetFieldError(field, "Escribe un ID válido"); field.UpdateLayout();
+        Assert.True(UiState.GetHasFieldError(field));
+        Assert.Equal(field.FindResource("Error"), field.BorderBrush);
+        Assert.Equal("invalid model", field.Text);
+        UiState.SetFieldError(field, ""); field.UpdateLayout();
+        Assert.False(UiState.GetHasFieldError(field)); Assert.Equal(original, field.BorderBrush);
+        Assert.Equal("invalid model", field.Text);
     });
     private static IEnumerable<DependencyObject> Descendants(DependencyObject parent)
     {

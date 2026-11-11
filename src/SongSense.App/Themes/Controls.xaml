@@ -5,6 +5,29 @@
  <sys:Double x:Key="UiEditorMinHeight">0</sys:Double>
  <sys:Double x:Key="UiMainMinimumHeight">0</sys:Double>
  <sys:Double x:Key="UiHeading18">18</sys:Double><sys:Double x:Key="UiHeading20">20</sys:Double><sys:Double x:Key="UiHeading22">22</sys:Double><sys:Double x:Key="UiHeading24">24</sys:Double><sys:Double x:Key="UiHeading26">26</sys:Double>
+ <!-- Semantic layout roles. Fixed spacing is DIP; only typography/icon metrics follow UI text scale. -->
+ <sys:Double x:Key="Space4">4</sys:Double>
+ <sys:Double x:Key="Space8">8</sys:Double>
+ <sys:Double x:Key="Space12">12</sys:Double>
+ <sys:Double x:Key="Space16">16</sys:Double>
+ <sys:Double x:Key="Space24">24</sys:Double>
+ <sys:Double x:Key="Space32">32</sys:Double>
+ <Thickness x:Key="RelatedGap">0,0,8,8</Thickness>
+ <Thickness x:Key="FieldGap">0,0,0,8</Thickness>
+ <Thickness x:Key="SectionGap">0,0,0,24</Thickness>
+ <Thickness x:Key="CompactSectionGap">0,0,0,16</Thickness>
+ <Thickness x:Key="PageInset">24</Thickness><Thickness x:Key="CompactPageInset">12</Thickness>
+ <Thickness x:Key="UiExpanderContentInset">38,12,0,0</Thickness>
+ <Thickness x:Key="NoticeInset">12</Thickness><Thickness x:Key="NoticeGap">0,0,0,16</Thickness>
+ <sys:Double x:Key="UiControlMinimum">40</sys:Double><sys:Double x:Key="UiCompactMinimum">36</sys:Double>
+ <sys:Double x:Key="UiIconSize">20</sys:Double><sys:Double x:Key="UiIconColumn">24</sys:Double>
+ <sys:Double x:Key="UiIconStroke">1.6</sys:Double>
+ <sys:Double x:Key="UiChevronSize">12</sys:Double><sys:Double x:Key="UiFirstLineHeight">24</sys:Double>
+ <Geometry x:Key="NoticeInformation">M10,1 A9,9 0 1 1 9.99,1 M10,8 L10,15 M10,5 L10,5.1</Geometry>
+ <Geometry x:Key="NoticeSuccess">M10,1 A9,9 0 1 1 9.99,1 M5,10 L8.5,13.5 L15,6.5</Geometry>
+ <Geometry x:Key="NoticeWarning">M10,1 L19,18 L1,18 Z M10,7 L10,11 M10,14 L10,14.1</Geometry>
+ <Geometry x:Key="NoticeError">M10,1 A9,9 0 1 1 9.99,1 M6.5,6.5 L13.5,13.5 M13.5,6.5 L6.5,13.5</Geometry>
+ <Geometry x:Key="NoticeProgress">M10,1 A9,9 0 1 1 9.99,1 M10,4 L10,10 L14,12</Geometry>
  <ControlTemplate x:Key="ValidationAdornment">
   <DockPanel LastChildFill="True">
    <Border DockPanel.Dock="Right" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Error}" BorderThickness="2" Margin="4,0,0,0" Padding="4,0">
@@ -42,9 +65,10 @@
  <Style TargetType="Button">
   <Setter Property="Foreground" Value="{DynamicResource Ink}" />
   <Setter Property="Background" Value="{DynamicResource Raised}" />
-  <Setter Property="BorderBrush" Value="{DynamicResource ControlBorder}" />
+  <Setter Property="BorderBrush" Value="{DynamicResource Outline}" />
   <Setter Property="BorderThickness" Value="1" />
-  <Setter Property="Padding" Value="16,10" />
+  <Setter Property="Padding" Value="12,8" />
+  <Setter Property="MinHeight" Value="{DynamicResource UiControlMinimum}" />
   <Setter Property="FontSize" Value="{DynamicResource UiControlFont}" />
   <Setter Property="Cursor" Value="Hand" />
   <Setter Property="Validation.ErrorTemplate" Value="{StaticResource ValidationAdornment}" />
@@ -61,9 +85,10 @@
         <TextBlock Grid.Row="1" x:Name="BusyMark" Text="En curso…" Visibility="Collapsed" Foreground="{TemplateBinding Foreground}" FontSize="{DynamicResource UiInstructionFont}" />
        </Grid>
       </Border>
-      <Border x:Name="FocusRing" BorderBrush="{DynamicResource Focus}" BorderThickness="2" CornerRadius="10" Margin="-3" Visibility="Collapsed" IsHitTestVisible="False" />
+      <Border x:Name="FocusRing" BorderBrush="{DynamicResource Focus}" BorderThickness="2" CornerRadius="6" Margin="2" Visibility="Collapsed" IsHitTestVisible="False" />
      </Grid>
      <ControlTemplate.Triggers>
+      <Trigger Property="local:UiLayout.IsCompact" Value="True"><Setter Property="MinHeight" Value="{DynamicResource UiCompactMinimum}"/></Trigger>
       <Trigger Property="IsMouseOver" Value="True">
        <Setter Property="Background" Value="{DynamicResource HoverSurface}" />
        <Setter Property="Foreground" Value="{DynamicResource SelectionInk}" />
@@ -71,7 +96,7 @@
       <Trigger Property="IsPressed" Value="True">
        <Setter Property="Background" Value="{DynamicResource PressedSurface}" />
        <Setter Property="Foreground" Value="{DynamicResource SelectionInk}" />
-       <Setter TargetName="Body" Property="BorderThickness" Value="2" />
+       <Setter TargetName="Body" Property="BorderBrush" Value="{DynamicResource Focus}" />
       </Trigger>
       <Trigger Property="IsKeyboardFocused" Value="True">
        <Setter TargetName="FocusRing" Property="Visibility" Value="Visible" />
@@ -120,6 +145,10 @@
   <Setter Property="Background" Value="{DynamicResource Canvas}" />
   <Setter Property="Padding" Value="12,8" />
  </Style>
+ <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource QuietButton}"><Setter Property="BorderBrush" Value="{DynamicResource Error}"/><Setter Property="Foreground" Value="{DynamicResource Error}"/></Style>
+ <Style x:Key="IconButton" TargetType="Button" BasedOn="{StaticResource QuietButton}"><Setter Property="Padding" Value="4"/><Setter Property="MinWidth" Value="{Binding ActualHeight, RelativeSource={RelativeSource Self}}"/><Setter Property="HorizontalContentAlignment" Value="Center"/></Style>
+ <Style TargetType="local:ActionPanel"><Setter Property="Gap" Value="{DynamicResource Space8}"/><Setter Property="RowGap" Value="{DynamicResource Space8}"/></Style>
+ <Style x:Key="MixedActionPanel" TargetType="local:ActionPanel" BasedOn="{StaticResource {x:Type local:ActionPanel}}"><Setter Property="Gap" Value="{DynamicResource Space12}"/></Style>
  <Style TargetType="RadioButton">
   <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
   <Setter Property="FontSize" Value="{DynamicResource UiControlFont}"/>
@@ -184,20 +213,21 @@
   <Setter Property="Foreground" Value="{DynamicResource Ink}" />
   <Setter Property="BorderBrush" Value="{DynamicResource ControlBorder}" />
   <Setter Property="BorderThickness" Value="1" />
-  <Setter Property="Padding" Value="12" />
+  <Setter Property="Padding" Value="12,8" />
+  <Setter Property="MinHeight" Value="{DynamicResource UiControlMinimum}" />
   <Setter Property="FontSize" Value="{DynamicResource UiControlFont}" />
   <Setter Property="Validation.ErrorTemplate" Value="{StaticResource ValidationAdornment}" />
   <Style.Triggers>
+   <Trigger Property="local:UiLayout.IsCompact" Value="True"><Setter Property="MinHeight" Value="{DynamicResource UiCompactMinimum}"/></Trigger>
    <Trigger Property="IsMouseOver" Value="True">
     <Setter Property="BorderBrush" Value="{DynamicResource Focus}" />
    </Trigger>
    <Trigger Property="IsKeyboardFocusWithin" Value="True">
     <Setter Property="BorderBrush" Value="{DynamicResource Focus}" />
-    <Setter Property="BorderThickness" Value="2" />
    </Trigger>
+   <Trigger Property="local:UiState.HasFieldError" Value="True"><Setter Property="BorderBrush" Value="{DynamicResource Error}"/></Trigger>
    <Trigger Property="Validation.HasError" Value="True">
     <Setter Property="BorderBrush" Value="{DynamicResource Error}" />
-    <Setter Property="BorderThickness" Value="2" />
    </Trigger>
    <Trigger Property="IsEnabled" Value="False">
     <Setter Property="Foreground" Value="{DynamicResource DisabledText}" />
@@ -226,7 +256,7 @@
  </Style>
  <Style TargetType="ComboBox" BasedOn="{StaticResource InputBase}">
   <Setter Property="Padding" Value="10,8" />
-  <Setter Property="MinHeight" Value="38" />
+  <Setter Property="MinHeight" Value="{DynamicResource UiControlMinimum}" />
   <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
   <Setter Property="Template">
    <Setter.Value>
@@ -242,7 +272,7 @@
         </ControlTemplate>
        </ToggleButton.Template>
       </ToggleButton>
-      <ContentPresenter Margin="10,6,32,6" VerticalAlignment="Center" Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}" TextElement.Foreground="{TemplateBinding Foreground}" IsHitTestVisible="False" />
+      <ContentPresenter Margin="10,6,32,6" VerticalAlignment="Center" Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}" TextElement.Foreground="{TemplateBinding Foreground}" IsHitTestVisible="False"><ContentPresenter.Resources><DataTemplate DataType="{x:Type sys:String}"><TextBlock Text="{Binding}" FontSize="{Binding FontSize, RelativeSource={RelativeSource AncestorType=ComboBox}}" TextWrapping="Wrap"/></DataTemplate></ContentPresenter.Resources></ContentPresenter>
       <Popup x:Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" AllowsTransparency="True" Focusable="False">
        <Border MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1" Padding="4">
         <ScrollViewer MaxHeight="280" CanContentScroll="True" HorizontalScrollBarVisibility="Disabled">
@@ -328,6 +358,8 @@
   <Setter Property="Padding" Value="0" />
  </Style>
  <Style TargetType="TabItem">
+  <Setter Property="MaxWidth" Value="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=TabControl}}"/>
+  <Setter Property="MinHeight" Value="{DynamicResource UiControlMinimum}"/>
   <Setter Property="Padding" Value="18,12" />
   <Setter Property="Foreground" Value="{DynamicResource Ink}" />
   <Setter Property="FontSize" Value="{DynamicResource UiControlFont}" />
@@ -335,21 +367,22 @@
    <Setter.Value>
     <ControlTemplate TargetType="TabItem">
      <Border x:Name="TabBorder" Padding="{TemplateBinding Padding}" Margin="0,0,8,12" Background="{DynamicResource Surface}" CornerRadius="8" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1">
-      <ContentPresenter ContentSource="Header" RecognizesAccessKey="True" TextElement.Foreground="{TemplateBinding Foreground}" />
+      <ContentPresenter x:Name="TabHeader" ContentSource="Header" RecognizesAccessKey="True" TextElement.Foreground="{TemplateBinding Foreground}"><ContentPresenter.Resources><DataTemplate DataType="{x:Type sys:String}"><AccessText Text="{Binding}" TextWrapping="Wrap"/></DataTemplate></ContentPresenter.Resources></ContentPresenter>
      </Border>
      <ControlTemplate.Triggers>
+      <Trigger Property="local:UiLayout.IsCompact" Value="True"><Setter Property="MinHeight" Value="{DynamicResource UiCompactMinimum}"/></Trigger>
       <Trigger Property="IsMouseOver" Value="True">
        <Setter TargetName="TabBorder" Property="Background" Value="{DynamicResource HoverSurface}" />
-       <Setter Property="Foreground" Value="{DynamicResource SelectionInk}" />
+       <Setter TargetName="TabHeader" Property="TextElement.Foreground" Value="{DynamicResource SelectionInk}" />
       </Trigger>
       <Trigger Property="IsSelected" Value="True">
-       <Setter TargetName="TabBorder" Property="Background" Value="{DynamicResource SelectionSurface}" />
-       <Setter Property="Foreground" Value="{DynamicResource SelectionInk}" />
+       <Setter TargetName="TabBorder" Property="Background" Value="{DynamicResource Gold}" />
+       <Setter TargetName="TabHeader" Property="TextElement.Foreground" Value="{DynamicResource OnAccent}" />
        <Setter TargetName="TabBorder" Property="BorderBrush" Value="{DynamicResource Gold}" />
       </Trigger>
       <Trigger Property="IsKeyboardFocused" Value="True">
        <Setter TargetName="TabBorder" Property="BorderBrush" Value="{DynamicResource Focus}" />
-       <Setter TargetName="TabBorder" Property="BorderThickness" Value="2" />
+       <Setter TargetName="TabBorder" Property="BorderBrush" Value="{DynamicResource Focus}" />
       </Trigger>
       <Trigger Property="IsEnabled" Value="False">
        <Setter Property="Foreground" Value="{DynamicResource DisabledText}" />
@@ -360,57 +393,41 @@
   </Setter>
  </Style>
  <Style x:Key="ExpanderToggle" TargetType="ToggleButton">
-  <Setter Property="Foreground" Value="{DynamicResource Ink}" />
-  <Setter Property="Template">
-   <Setter.Value>
-    <ControlTemplate TargetType="ToggleButton">
-     <Border x:Name="ToggleBorder" Background="Transparent" BorderBrush="Transparent" BorderThickness="2" Padding="2,4">
-      <DockPanel>
-       <TextBlock x:Name="Arrow" DockPanel.Dock="Left" Text="›" FontSize="{DynamicResource UiHeading18}" Margin="0,0,8,0" Foreground="{TemplateBinding Foreground}" />
-       <ContentPresenter VerticalAlignment="Center" RecognizesAccessKey="True" TextElement.Foreground="{TemplateBinding Foreground}" />
-      </DockPanel>
-     </Border>
-     <ControlTemplate.Triggers>
-      <Trigger Property="IsChecked" Value="True">
-       <Setter TargetName="Arrow" Property="Text" Value="⌄" />
-      </Trigger>
-      <Trigger Property="IsMouseOver" Value="True">
-       <Setter TargetName="ToggleBorder" Property="BorderBrush" Value="{DynamicResource ControlBorder}" />
-      </Trigger>
-      <Trigger Property="IsKeyboardFocused" Value="True">
-       <Setter TargetName="ToggleBorder" Property="BorderBrush" Value="{DynamicResource Focus}" />
-      </Trigger>
-      <Trigger Property="IsPressed" Value="True">
-       <Setter TargetName="ToggleBorder" Property="Background" Value="{DynamicResource SelectionSurface}" />
-       <Setter Property="Foreground" Value="{DynamicResource SelectionInk}" />
-      </Trigger>
-      <Trigger Property="IsEnabled" Value="False">
-       <Setter Property="Foreground" Value="{DynamicResource DisabledText}" />
-      </Trigger>
-     </ControlTemplate.Triggers>
-    </ControlTemplate>
-   </Setter.Value>
-  </Setter>
+  <Setter Property="Foreground" Value="{DynamicResource Ink}"/><Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+  <Setter Property="HorizontalAlignment" Value="Left"/><Setter Property="HorizontalContentAlignment" Value="Left"/>
+  <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ToggleButton">
+   <Border x:Name="ToggleBorder" Background="Transparent" BorderBrush="Transparent" BorderThickness="2" CornerRadius="5" Padding="4">
+    <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+     <Grid Width="{DynamicResource UiIconColumn}" Height="{DynamicResource UiFirstLineHeight}" VerticalAlignment="Top" IsHitTestVisible="False">
+      <Path x:Name="Arrow" Data="M3,1 L9,6 L3,11" Width="{DynamicResource UiChevronSize}" Height="{DynamicResource UiChevronSize}" Stretch="Uniform" Stroke="{TemplateBinding Foreground}" StrokeThickness="{DynamicResource UiIconStroke}" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" RenderTransformOrigin="0.5,0.5"><Path.RenderTransform><RotateTransform Angle="0"/></Path.RenderTransform></Path>
+     </Grid>
+     <ContentPresenter x:Name="HeaderText" Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Top" RecognizesAccessKey="True" TextElement.Foreground="{TemplateBinding Foreground}"><ContentPresenter.Resources><DataTemplate DataType="{x:Type sys:String}"><AccessText Text="{Binding}" TextWrapping="Wrap" TextBlock.LineHeight="{DynamicResource UiFirstLineHeight}"/></DataTemplate></ContentPresenter.Resources></ContentPresenter>
+    </Grid>
+   </Border>
+   <ControlTemplate.Triggers>
+    <Trigger Property="IsChecked" Value="True"><Setter TargetName="Arrow" Property="RenderTransform"><Setter.Value><RotateTransform Angle="90"/></Setter.Value></Setter></Trigger>
+    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ToggleBorder" Property="Background" Value="{DynamicResource Raised}"/></Trigger>
+    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ToggleBorder" Property="BorderBrush" Value="{DynamicResource Focus}"/></Trigger>
+    <Trigger Property="IsPressed" Value="True"><Setter TargetName="ToggleBorder" Property="Background" Value="{DynamicResource SelectionSurface}"/><Setter Property="Foreground" Value="{DynamicResource SelectionInk}"/></Trigger>
+    <Trigger Property="IsEnabled" Value="False"><Setter Property="Foreground" Value="{DynamicResource DisabledText}"/></Trigger>
+   </ControlTemplate.Triggers>
+  </ControlTemplate></Setter.Value></Setter>
  </Style>
  <Style TargetType="Expander">
-  <Setter Property="Foreground" Value="{DynamicResource Ink}" />
-  <Setter Property="FontSize" Value="{DynamicResource UiInstructionFont}" />
-  <Setter Property="Template">
-   <Setter.Value>
-    <ControlTemplate TargetType="Expander">
-     <StackPanel>
-      <ToggleButton Style="{StaticResource ExpanderToggle}" Content="{TemplateBinding Header}" ContentTemplate="{TemplateBinding HeaderTemplate}" IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" HorizontalContentAlignment="Left" />
-      <ContentPresenter x:Name="ContentSite" Visibility="Collapsed" />
-     </StackPanel>
-     <ControlTemplate.Triggers>
-      <Trigger Property="IsExpanded" Value="True">
-       <Setter TargetName="ContentSite" Property="Visibility" Value="Visible" />
-      </Trigger>
-     </ControlTemplate.Triggers>
-    </ControlTemplate>
-   </Setter.Value>
-  </Setter>
+  <Setter Property="Foreground" Value="{DynamicResource Ink}"/><Setter Property="FontSize" Value="{DynamicResource UiInstructionFont}"/>
+  <Setter Property="Padding" Value="{DynamicResource UiExpanderContentInset}"/>
+  <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Expander">
+   <StackPanel><ToggleButton x:Name="HeaderSite" Foreground="{TemplateBinding Foreground}" Style="{StaticResource ExpanderToggle}" Content="{TemplateBinding Header}" ContentTemplate="{TemplateBinding HeaderTemplate}" FontSize="{TemplateBinding FontSize}" MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}" IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"/>
+    <ContentPresenter x:Name="ContentSite" Margin="{TemplateBinding Padding}" Visibility="Collapsed"/>
+   </StackPanel>
+   <ControlTemplate.Triggers><Trigger Property="IsExpanded" Value="True"><Setter TargetName="ContentSite" Property="Visibility" Value="Visible"/></Trigger></ControlTemplate.Triggers>
+  </ControlTemplate></Setter.Value></Setter>
+  <Style.Triggers>
+   <Trigger Property="local:UiLayout.IsCompact" Value="True"><Setter Property="Padding" Value="16,12,0,0"/></Trigger>
+   <DataTrigger Binding="{Binding IsExpanded, RelativeSource={RelativeSource AncestorType=Expander}}" Value="True"><Setter Property="Padding" Value="0,12,0,0"/></DataTrigger>
+  </Style.Triggers>
  </Style>
+ <Style x:Key="NoticeDetailExpander" TargetType="Expander" BasedOn="{StaticResource {x:Type Expander}}"><Setter Property="Foreground" Value="{DynamicResource Muted}"/><Setter Property="FontSize" Value="{DynamicResource UiSecondaryFont}"/><Setter Property="Padding" Value="0,12,0,0"/><Setter Property="Margin" Value="0,8,0,0"/></Style>
  <Style x:Key="ScrollPageButton" TargetType="RepeatButton">
   <Setter Property="Focusable" Value="False" />
   <Setter Property="Template">
@@ -619,51 +636,42 @@
   </Setter>
  </Style>
  <Style TargetType="local:StatusNotice">
-  <Setter Property="Foreground" Value="{DynamicResource Information}" />
-  <Setter Property="Focusable" Value="False" />
-  <Setter Property="FontSize" Value="{DynamicResource UiInstructionFont}" />
-  <Setter Property="Template">
-   <Setter.Value>
-    <ControlTemplate TargetType="local:StatusNotice">
-     <Grid>
-      <Grid.ColumnDefinitions>
-       <ColumnDefinition Width="Auto" />
-       <ColumnDefinition Width="*" />
-      </Grid.ColumnDefinitions>
-      <TextBlock x:Name="Symbol" Text="ⓘ" FontFamily="Segoe UI Symbol" FontSize="{DynamicResource UiHeading18}" Foreground="{TemplateBinding Foreground}" Margin="0,0,8,0" />
-      <StackPanel Grid.Column="1">
-       <TextBlock x:Name="NoticeText" FontSize="{TemplateBinding FontSize}" Foreground="{TemplateBinding Foreground}" Text="{TemplateBinding DisplayText}" TextWrapping="Wrap" TextTrimming="None"/>
-       <Expander x:Name="NoticeDetail" Header="Ver detalle" FontSize="{DynamicResource UiInstructionFont}" Visibility="Collapsed">
-        <TextBox Text="{Binding Message, RelativeSource={RelativeSource TemplatedParent}, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" MaxHeight="120" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Detalle completo del aviso"/>
-       </Expander>
-      </StackPanel>
+  <Setter Property="Foreground" Value="{DynamicResource Information}"/><Setter Property="Focusable" Value="False"/>
+  <Setter Property="FontSize" Value="{DynamicResource UiInstructionFont}"/><Setter Property="Padding" Value="{DynamicResource NoticeInset}"/><Setter Property="Margin" Value="{DynamicResource NoticeGap}"/>
+  <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="local:StatusNotice">
+   <Border x:Name="NoticeFrame" Background="{DynamicResource Surface}" BorderBrush="{TemplateBinding Foreground}" BorderThickness="3,0,0,0" CornerRadius="4" Padding="{TemplateBinding Padding}">
+    <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+     <Grid x:Name="NoticeIconColumn" Width="{DynamicResource UiIconColumn}" Height="{DynamicResource UiFirstLineHeight}" VerticalAlignment="Top" IsHitTestVisible="False">
+      <Path x:Name="Symbol" Width="{DynamicResource UiIconSize}" Height="{DynamicResource UiIconSize}" Stretch="Uniform" Data="{StaticResource NoticeInformation}" Stroke="{TemplateBinding Foreground}" StrokeThickness="{DynamicResource UiIconStroke}" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Focusable="False"/>
      </Grid>
-    <ControlTemplate.Triggers>
-      <Trigger Property="HasDetails" Value="True"><Setter TargetName="NoticeDetail" Property="Visibility" Value="Visible"/></Trigger>
-      <Trigger Property="Kind" Value="Success">
-       <Setter Property="Foreground" Value="{DynamicResource Success}" />
-       <Setter TargetName="Symbol" Property="Text" Value="✓" />
-      </Trigger>
-      <Trigger Property="Kind" Value="Warning">
-       <Setter Property="Foreground" Value="{DynamicResource Warning}" />
-       <Setter TargetName="Symbol" Property="Text" Value="⚠" />
-      </Trigger>
-      <Trigger Property="Kind" Value="Error">
-       <Setter Property="Foreground" Value="{DynamicResource Error}" />
-       <Setter TargetName="Symbol" Property="Text" Value="⊗" />
-      </Trigger>
-      <Trigger Property="Kind" Value="Progress">
-       <Setter Property="Foreground" Value="{DynamicResource Progress}" />
-       <Setter TargetName="Symbol" Property="Text" Value="◷" />
-      </Trigger>
-     </ControlTemplate.Triggers>
-    </ControlTemplate>
-   </Setter.Value>
-  </Setter>
-  <Style.Triggers>
-   <Trigger Property="Message" Value="">
-    <Setter Property="Visibility" Value="Collapsed" />
-   </Trigger>
-  </Style.Triggers>
+     <StackPanel x:Name="NoticeBody" Grid.Column="1" Margin="8,0,0,0">
+      <TextBlock x:Name="NoticeText" FontSize="{TemplateBinding FontSize}" LineHeight="{DynamicResource UiFirstLineHeight}" Foreground="{DynamicResource Ink}" Text="{TemplateBinding DisplayText}" TextWrapping="Wrap" TextTrimming="None"/>
+      <TextBlock x:Name="NoticeExplanation" Style="{StaticResource OptionalText}" Text="{TemplateBinding Explanation}" FontSize="{TemplateBinding FontSize}" LineHeight="{DynamicResource UiFirstLineHeight}" Foreground="{DynamicResource Muted}" Margin="0,8,0,0"/>
+      <Expander x:Name="NoticeDetail" Style="{StaticResource NoticeDetailExpander}" Header="Ver detalle" Visibility="Collapsed">
+       <TextBox Text="{Binding Message, RelativeSource={RelativeSource TemplatedParent}, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" MaxHeight="200" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Detalle completo del aviso"/>
+      </Expander>
+      <ContentPresenter x:Name="NoticeAction" HorizontalAlignment="Left" Content="{TemplateBinding ActionContent}" Margin="0,12,0,0" Visibility="Collapsed"/>
+     </StackPanel>
+    </Grid>
+   </Border>
+   <ControlTemplate.Triggers>
+    <Trigger Property="Presentation" Value="Routine">
+     <Setter TargetName="NoticeFrame" Property="Background" Value="Transparent"/><Setter TargetName="NoticeFrame" Property="BorderThickness" Value="0"/><Setter TargetName="NoticeFrame" Property="Padding" Value="0"/>
+     <Setter TargetName="NoticeIconColumn" Property="Visibility" Value="Collapsed"/><Setter TargetName="NoticeBody" Property="Margin" Value="0"/>
+     <Setter TargetName="NoticeText" Property="Foreground" Value="{DynamicResource Muted}"/><Setter TargetName="NoticeText" Property="FontSize" Value="{DynamicResource UiSecondaryFont}"/>
+    </Trigger>
+    <Trigger Property="Presentation" Value="Contextual">
+     <Setter TargetName="NoticeFrame" Property="Background" Value="Transparent"/><Setter TargetName="NoticeFrame" Property="BorderThickness" Value="0"/><Setter TargetName="NoticeFrame" Property="Padding" Value="0"/>
+     <Setter TargetName="NoticeIconColumn" Property="Visibility" Value="Collapsed"/><Setter TargetName="NoticeBody" Property="Margin" Value="0"/>
+    </Trigger>
+    <Trigger Property="HasDetails" Value="True"><Setter TargetName="NoticeDetail" Property="Visibility" Value="Visible"/></Trigger>
+    <Trigger Property="HasAction" Value="True"><Setter TargetName="NoticeAction" Property="Visibility" Value="Visible"/></Trigger>
+    <Trigger Property="Kind" Value="Success"><Setter Property="Foreground" Value="{DynamicResource Success}"/><Setter TargetName="Symbol" Property="Data" Value="{StaticResource NoticeSuccess}"/></Trigger>
+    <Trigger Property="Kind" Value="Warning"><Setter Property="Foreground" Value="{DynamicResource Warning}"/><Setter TargetName="Symbol" Property="Data" Value="{StaticResource NoticeWarning}"/></Trigger>
+    <Trigger Property="Kind" Value="Error"><Setter Property="Foreground" Value="{DynamicResource Error}"/><Setter TargetName="Symbol" Property="Data" Value="{StaticResource NoticeError}"/></Trigger>
+    <Trigger Property="Kind" Value="Progress"><Setter Property="Foreground" Value="{DynamicResource Progress}"/><Setter TargetName="Symbol" Property="Data" Value="{StaticResource NoticeProgress}"/></Trigger>
+   </ControlTemplate.Triggers>
+  </ControlTemplate></Setter.Value></Setter>
+  <Style.Triggers><Trigger Property="Message" Value=""><Setter Property="Visibility" Value="Collapsed"/></Trigger></Style.Triggers>
  </Style>
 </ResourceDictionary>

@@ -13,7 +13,7 @@ public partial class MainWindow
 {
     private void ShowAbout(object sender, RoutedEventArgs args)
     {
-        var about = new Window { Title = "Acerca de Song Sense", Owner = this, Width = 480, Height = 380, MinWidth = 360, MinHeight = 300, Content = AuxiliaryContent.Create(new { Version = $"Versión {BuildIdentity.ProductVersion}\nBuild {BuildIdentity.FileVersion}\n\nAceptación pendiente\nVersión previa: accesibilidad, escalas, monitores y pruebas con personas requieren aceptación externa.\n\nLectura local y proveedores elegidos explícitamente. Los análisis requieren una acción expresa." }, "Version", "Song Sense", "Versión y estado de aceptación"), WindowStartupLocation = WindowStartupLocation.CenterOwner };
+        var about = new Window { Title = "Acerca de Song Sense", Owner = this, Width = 480, Height = 520, MinWidth = 360, MinHeight = 480, Content = AuxiliaryContent.CreatePresentation(new { Version = $"Versión: {BuildIdentity.ProductVersion}\nBuild: {BuildIdentity.FileVersion}\n\nEstado: Aceptación pendiente\nVersión previa: accesibilidad, escalas, monitores y pruebas con personas requieren aceptación externa.\n\nLectura local y proveedores elegidos explícitamente. Los análisis requieren una acción expresa." }, "Version", "Song Sense", "Versión y estado de aceptación"), WindowStartupLocation = WindowStartupLocation.CenterOwner };
         about.SetResourceReference(BackgroundProperty, "Canvas"); about.SetResourceReference(ForegroundProperty, "Ink");
         about.SourceInitialized += (_, _) => WindowAppearance.Apply(about);
         about.ShowDialog();

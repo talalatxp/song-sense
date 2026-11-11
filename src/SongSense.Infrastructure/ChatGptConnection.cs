@@ -24,6 +24,7 @@ public sealed class ChatGptConnection(ChatGptCredentialStore store, ChatGptOAuth
     public string? Model => Active?.Model;
     public bool Connected => ready && Active is { HasSession: true };
     public bool PlanGranted => Connected && Active!.Scopes.Contains(ChatGptOAuthClient.PlanScope, StringComparer.Ordinal);
+    public string AccountIdentity => Active is null ? "Ninguna cuenta conectada" : string.IsNullOrWhiteSpace(Active.Email) ? "Cuenta conectada" : Active.Email;
     public string AccountLabel => Active is { } account ? Label(account, credentials.Registrations.IndexOf(account) + 1) : "Ninguna cuenta conectada";
     public IReadOnlyList<ChatGptAccount> Accounts => credentials.Registrations.Select((x, index) => new ChatGptAccount(x.ClientId, Label(x, index + 1))).ToArray();
     public IReadOnlyList<ChatGptModel> Models { get; private set; } = [];

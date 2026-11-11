@@ -1,42 +1,61 @@
 <Window x:Class="SongSense.App.LyricsEditorWindow"
  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:ui="clr-namespace:SongSense.App"
- Title="Cambiar letra · SongSense" Width="780" Height="680" MinWidth="360" MinHeight="480" SizeChanged="AdaptEditor"
- Icon="pack://application:,,,/Assets/SongSense.ico"
+ Title="Cambiar letra · Song Sense" Width="780" Height="680" MinWidth="360" MinHeight="480" SizeChanged="AdaptEditor"
+ Icon="pack://application:,,,/SongSense;component/Assets/SongSense.ico"
  Background="{DynamicResource Canvas}" Foreground="{DynamicResource Ink}" FontFamily="Segoe UI" WindowStartupLocation="CenterOwner">
- <ScrollViewer x:Name="EditorOuterScroll" Margin="6" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><Grid Height="{Binding ViewportHeight, ElementName=EditorOuterScroll}" MinHeight="{DynamicResource UiEditorMinHeight}">
+ <Window.Resources><ui:CandidateTwoLinesConverter x:Key="CandidateTwoLines"/></Window.Resources>
+ <ScrollViewer x:Name="EditorOuterScroll" Margin="24" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><Grid Height="{Binding ViewportHeight, ElementName=EditorOuterScroll}" MinHeight="{DynamicResource UiEditorMinHeight}">
   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-  <StackPanel Margin="0,0,0,4">
+  <StackPanel Margin="0,0,0,16">
 
    <TextBlock Text="{Binding TrackLabel}" ToolTip="{Binding TrackLabel}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" FontSize="{DynamicResource UiControlFont}" Margin="0,0,0,0"/>
 
   </StackPanel>
   <TabControl x:Name="EditorTabs" Grid.Row="1" Background="{DynamicResource Canvas}" BorderThickness="0">
    <TabItem Header="Versiones">
-    <Grid x:Name="VersionsGrid" Margin="2">
-     <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+    <Grid x:Name="VersionsGrid" Margin="0,12,0,0">
+     <Grid.ColumnDefinitions><ColumnDefinition Width="2*"/><ColumnDefinition Width="3*"/></Grid.ColumnDefinitions>
      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
      <TextBlock x:Name="VersionsHeading" Grid.ColumnSpan="2" Text="{Binding VersionsMessage}" TextWrapping="Wrap" FontSize="{DynamicResource UiInstructionFont}" Margin="0,0,0,10"/>
      <ListBox x:Name="VersionsList" Grid.Row="1" Grid.RowSpan="2" ItemsSource="{Binding Options}" SelectedItem="{Binding Selected}" ScrollViewer.HorizontalScrollBarVisibility="Disabled" HorizontalContentAlignment="Stretch" AutomationProperties.Name="Versiones disponibles">
       <ListBox.ItemTemplate><DataTemplate><StackPanel Margin="4">
-       <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="{DynamicResource UiInstructionFont}"/>
+       <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="{DynamicResource UiInstructionFont}" TextTrimming="CharacterEllipsis" LineHeight="{Binding FontSize, RelativeSource={RelativeSource Self}, Converter={StaticResource CandidateTwoLines}, ConverterParameter=Line}" MaxHeight="{Binding FontSize, RelativeSource={RelativeSource Self}, Converter={StaticResource CandidateTwoLines}}"/>
        <TextBlock Text="{Binding Details}" FontSize="{DynamicResource UiInstructionFont}" Margin="0,4,0,0"/>
       </StackPanel></DataTemplate></ListBox.ItemTemplate>
      </ListBox>
-     <ScrollViewer x:Name="VersionPreview" Grid.Row="1" Grid.Column="1" Grid.RowSpan="2" VerticalScrollBarVisibility="Auto" Margin="10,0,0,8" Focusable="True" KeyboardNavigation.IsTabStop="True" AutomationProperties.Name="Vista previa completa de la letra"><TextBlock Text="{Binding Preview}" FontSize="{DynamicResource UiControlFont}"/></ScrollViewer>
-     <WrapPanel Grid.Row="3" Grid.ColumnSpan="2"><Button x:Name="VersionBack" Content="Volver a versiones" Click="ShowVersions" Visibility="Collapsed" Margin="0,0,6,4"/><Button x:Name="PreviewNext" Content="Ver letra seleccionada" Click="ShowSelectedVersion" IsEnabled="{Binding CanPreviewVersion}" Margin="0,0,6,4"/><Button x:Name="ConfirmVersionButton" Content="Confirmar versión" Style="{StaticResource PrimaryButton}" Command="{Binding ConfirmCommand}" Padding="14,8" HorizontalAlignment="Left" Margin="0,0,0,4"/></WrapPanel>
+     <ScrollViewer x:Name="VersionPreview" Grid.Row="1" Grid.Column="1" Grid.RowSpan="2" VerticalScrollBarVisibility="Auto" Margin="10,0,0,8" Focusable="True" KeyboardNavigation.IsTabStop="True" AutomationProperties.Name="Vista previa completa de la letra"><StackPanel><TextBlock Text="{Binding PreviewHeading}" TextTrimming="CharacterEllipsis" LineHeight="{Binding FontSize, RelativeSource={RelativeSource Self}, Converter={StaticResource CandidateTwoLines}, ConverterParameter=Line}" MaxHeight="{Binding FontSize, RelativeSource={RelativeSource Self}, Converter={StaticResource CandidateTwoLines}}" FontWeight="SemiBold" Margin="0,0,0,8"/><Expander x:Name="VersionDetails" Header="Detalles de esta versión" Margin="0,0,0,12">
+      <Expander.Style><Style TargetType="Expander" BasedOn="{StaticResource {x:Type Expander}}"><Style.Triggers>
+       <DataTrigger Binding="{Binding Selected}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/><Setter Property="IsExpanded" Value="False"/></DataTrigger>
+      </Style.Triggers></Style></Expander.Style><TextBox Text="{Binding PreviewIdentity, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" BorderThickness="0" Background="Transparent"/></Expander><TextBlock Text="{Binding PreviewInstruction}" Style="{StaticResource OptionalText}" Margin="0,0,0,8"/><TextBlock Text="{Binding Preview}" FontSize="{DynamicResource UiControlFont}"/></StackPanel></ScrollViewer>
+     <ui:ActionPanel x:Name="VersionActions" Grid.Row="3" Grid.ColumnSpan="2" Gap="12" Margin="0,16,0,0"><Button x:Name="VersionBack" Content="Volver a versiones" Click="ShowVersions" Visibility="Collapsed" Margin="0"/><Button x:Name="PreviewNext" Content="Ver letra seleccionada" Click="ShowSelectedVersion" IsEnabled="{Binding CanPreviewVersion}" Margin="0"/><Button x:Name="ConfirmVersionButton" Content="Confirmar versión" Style="{StaticResource PrimaryButton}" Command="{Binding ConfirmCommand}" Padding="14,8" HorizontalAlignment="Left" Margin="0"/></ui:ActionPanel>
     </Grid>
    </TabItem>
    <TabItem Header="Manual">
-    <Grid Margin="2">
+    <Grid Margin="0,12,0,0">
      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-     <TextBlock Text="Introduce o corrige la letra." FontSize="{DynamicResource UiInstructionFont}" Margin="0,0,0,4"/>
+     <TextBlock x:Name="ManualLabel" Text="Letra manual" FontSize="{DynamicResource UiInstructionFont}" Margin="0,0,0,8"/>
      <TextBox x:Name="ManualInput" Grid.Row="1" Text="{Binding ManualText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" FontSize="{DynamicResource UiControlFont}" Padding="10" AutomationProperties.Name="Letra manual" AutomationProperties.HelpText="{Binding ManualAccessibilityHint}" IsEnabled="{Binding CanEditDraft}"/>
-     <TextBlock Grid.Row="2" Text="{Binding CharacterCount}" AutomationProperties.Name="{Binding CharacterCount}" AutomationProperties.HelpText="Contador del borrador. Máximo 20.000 caracteres; el texto no se recorta." AutomationProperties.LiveSetting="Off" FontSize="{DynamicResource UiInstructionFont}" Margin="0,2,0,2"/>
-     <StackPanel Grid.Row="3"><TextBlock Text="{Binding ManualHint}" Style="{StaticResource OptionalText}" FontSize="{DynamicResource UiInstructionFont}"/><ui:LiveText Text="{Binding ManualFeedback}" FontSize="{DynamicResource UiInstructionFont}" TextWrapping="Wrap"><ui:LiveText.Style><Style TargetType="ui:LiveText" BasedOn="{StaticResource {x:Type TextBlock}}"><Style.Triggers><Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed"/></Trigger></Style.Triggers></Style></ui:LiveText.Style></ui:LiveText><Button Content="Guardar letra" AutomationProperties.HelpText="{Binding ManualAccessibilityHint}" Style="{StaticResource PrimaryButton}" Command="{Binding SaveCommand}" Padding="14,8" HorizontalAlignment="Left"/></StackPanel>
+     <TextBlock x:Name="ManualCount" Grid.Row="2" Text="{Binding CharacterCount}" AutomationProperties.Name="{Binding CharacterCount}" AutomationProperties.HelpText="Contador del borrador. Máximo 20.000 caracteres; el texto no se recorta." AutomationProperties.LiveSetting="Off" FontSize="{DynamicResource UiInstructionFont}" Margin="0,8,0,0"/>
+     <StackPanel Grid.Row="3" Margin="0,8,0,0">
+      <ui:LiveText x:Name="ManualStatus" Text="{Binding ManualStatus}" FontSize="{DynamicResource UiSecondaryFont}" TextWrapping="Wrap" Margin="0,0,0,12">
+       <ui:LiveText.Style><Style TargetType="ui:LiveText" BasedOn="{StaticResource {x:Type TextBlock}}"><Style.Triggers>
+        <Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed"/></Trigger>
+        <DataTrigger Binding="{Binding ManualStatusNeedsAttention}" Value="True"><Setter Property="Foreground" Value="{DynamicResource Error}"/></DataTrigger>
+       </Style.Triggers></Style></ui:LiveText.Style>
+      </ui:LiveText>
+      <ui:ActionPanel x:Name="ManualActions" Gap="12">
+       <Button Content="Guardar letra" AutomationProperties.HelpText="{Binding ManualAccessibilityHint}" Style="{StaticResource PrimaryButton}" Command="{Binding SaveCommand}" Padding="14,8" HorizontalAlignment="Left"/>
+       <Button Content="Copiar borrador" Click="CopyDraft" IsEnabled="{Binding CanCopyDraft}" Style="{StaticResource QuietButton}"/>
+      </ui:ActionPanel>
+     </StackPanel>
     </Grid>
    </TabItem>
   </TabControl>
-  <ScrollViewer Grid.Row="2" MaxHeight="140" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel Margin="0,4,0,0"><Button Content="Copiar borrador" Click="CopyDraft" IsEnabled="{Binding CanCopyDraft}" HorizontalAlignment="Left" Padding="8,5" FontSize="{DynamicResource UiControlFont}" Margin="0,0,0,4"/><Expander Header="{Binding ErrorSummary}" AutomationProperties.HelpText="{Binding Error}"><Expander.Style><Style TargetType="Expander" BasedOn="{StaticResource {x:Type Expander}}"><Style.Triggers><DataTrigger Binding="{Binding Error}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Expander.Style><TextBlock Text="{Binding Error}" FontSize="{DynamicResource UiInstructionFont}" TextWrapping="Wrap"/></Expander></StackPanel></ScrollViewer>
+  <ScrollViewer Grid.Row="2" MaxHeight="140" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+   <ScrollViewer.Style><Style TargetType="ScrollViewer"><Style.Triggers>
+    <DataTrigger Binding="{Binding SelectedIndex, ElementName=EditorTabs}" Value="1"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+    <DataTrigger Binding="{Binding VersionError}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+   </Style.Triggers></Style></ScrollViewer.Style><StackPanel Margin="0,4,0,0"><Expander Header="{Binding ErrorSummary}" AutomationProperties.HelpText="{Binding VersionError}"><Expander.Style><Style TargetType="Expander" BasedOn="{StaticResource {x:Type Expander}}"><Style.Triggers><DataTrigger Binding="{Binding VersionError}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Expander.Style><TextBlock Text="{Binding VersionError}" FontSize="{DynamicResource UiInstructionFont}" TextWrapping="Wrap"/></Expander></StackPanel></ScrollViewer>
  </Grid></ScrollViewer>
 </Window>

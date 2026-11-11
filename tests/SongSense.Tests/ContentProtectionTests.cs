@@ -28,6 +28,7 @@ public sealed class ContentProtectionTests
         var vm = await Start(new()); using var editor = new LyricsEditorViewModel(vm, vm.BeginLyricsEdit()!);
         Assert.Empty(editor.Error); Assert.Empty(editor.ManualError); Assert.NotEmpty(editor.ManualHint);
         Assert.False(editor.SaveCommand.CanExecute(null)); Assert.Contains("No hay versiones",editor.VersionsMessage);
+        Assert.DoesNotContain("sin guardar", editor.ManualStatus);
         await editor.SaveAsync(); Assert.NotEmpty(editor.ManualError); Assert.Empty(editor.Error); Assert.Null(vm.PreparedLyrics);
         editor.ManualText="Una letra propia"; Assert.Empty(editor.ManualError);
         editor.ManualText=" "; Assert.NotEmpty(editor.ManualError); Assert.Empty(editor.Error); await vm.StopAsync();
@@ -88,7 +89,7 @@ public sealed class ContentProtectionTests
         var cache = new Cache { FailWrite = true }; var vm = await Start(cache); using var editor = new LyricsEditorViewModel(vm, vm.BeginLyricsEdit()!);
         editor.ManualText = "Texto propio completo"; var committed = 0; editor.Committed += (_, _) => committed++;
         await editor.SaveAsync(); Assert.Equal(0, committed); Assert.Null(vm.PreparedLyrics); Assert.True(editor.HasChanges);
-        Assert.Equal("Texto propio completo", editor.ManualText); Assert.Contains("reintentar", editor.Error); Assert.True(editor.SaveCommand.CanExecute(null));
+        Assert.Equal("Texto propio completo", editor.ManualText); Assert.Contains("reintentar", editor.Error); Assert.Equal(editor.Error, editor.ManualStatus); Assert.True(editor.SaveCommand.CanExecute(null));
         cache.FailWrite = false; await editor.SaveAsync(); Assert.Equal(1, committed); Assert.Equal(editor.ManualText, cache.Saved!.Text);
         Assert.Contains("este dispositivo", editor.SaveMessage); await vm.StopAsync();
     }
@@ -109,6 +110,9 @@ public sealed class ContentProtectionTests
         editor.ManualText = "Borrador de canción 1"; var save = editor.SaveAsync(); await cache.Started.Task;
         vm.ApplyDetection(Track(2)); cache.Release.TrySetResult(); await save;
         Assert.False(editor.IsCurrent); Assert.True(editor.HasChanges); Assert.Contains("Borrador", editor.ManualText); Assert.Equal(2, vm.CurrentTrack!.Revision);
+        editor.ManualText = new string('x', 20_001);
+        Assert.Equal(editor.Error, editor.ManualStatus); Assert.Contains("copiar", editor.ManualStatus);
+        Assert.False(editor.SaveCommand.CanExecute(null)); Assert.True(editor.CanCopyDraft);
         await vm.StopAsync();
     }
     internal sealed class Provider : ILyricsProvider

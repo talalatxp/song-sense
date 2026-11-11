@@ -38,6 +38,13 @@ public sealed partial class MainViewModel
     public AsyncCommand RetryAutomaticCommand { get; }
     public ActionCommand ResumeTrackingCommand { get; }
     public bool CanResumeTracking => !AutomaticUpdatesEnabled && !automaticStopped && !lifetime.IsCancellationRequested;
+    public bool ShowTrackingPause => !AutomaticUpdatesEnabled;
+    private bool ObservingOtherTrack => latestObservation.State is ApplicationState.Playing or ApplicationState.Paused
+        && CurrentTrack is not null && latestObservation.Track is { } observed && observed.Revision != CurrentTrack.Revision;
+    public string TrackingPauseHeading => HasPreparedLyrics ? "Letra fijada" : "Seguimiento pausado";
+    public string TrackingPauseContext => (HasPreparedLyrics ? "Seguimiento pausado" : "Sin letra mostrada") + (ObservingOtherTrack ? " · otra canción en Spotify" : "");
+    public string TrackingPauseMessage => (HasPreparedLyrics ? "Seguimiento pausado · letra fijada" : "Seguimiento pausado")
+        + (ObservingOtherTrack ? " · Spotify reproduce otra canción; se conserva la mostrada" : "");
     public string TrackContextLabel => AutomaticUpdatesEnabled && CurrentTrack is not null && latestObservation.State == ApplicationState.Playing
         && latestObservation.Track?.Playback == PlaybackState.Playing ? "AHORA SUENA" : "CANCIÓN MOSTRADA";
     // Playback describes the latest observation, even when the displayed content is frozen.
@@ -53,13 +60,14 @@ public sealed partial class MainViewModel
             PlaybackState.Stopped => "Spotify detenido",
             _ => "Estado de reproducción no disponible"
         }
-    }) + (!AutomaticUpdatesEnabled && CurrentTrack is not null && latestObservation.Track is { } observed && observed.Revision != CurrentTrack.Revision
+    }) + (!AutomaticUpdatesEnabled && ObservingOtherTrack
         ? " · otra canción" : "");
     public string TrackingStatus => AutomaticUpdatesEnabled ? "Seguimiento activo" : CurrentTrack is null
         ? "Seguimiento pausado · sin canción mostrada" : "Seguimiento pausado · mostrando esta canción";
     private void NotifyPlaybackContext()
     {
         OnChanged(nameof(TrackContextLabel)); OnChanged(nameof(PlaybackStatus)); OnChanged(nameof(TrackingStatus));
+        OnChanged(nameof(ShowTrackingPause)); OnChanged(nameof(TrackingPauseMessage)); OnChanged(nameof(TrackingPauseHeading)); OnChanged(nameof(TrackingPauseContext));
         OnChanged(nameof(CanResumeTracking)); ResumeTrackingCommand.Refresh();
     }
     private void NotifyAutomatic()

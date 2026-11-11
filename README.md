@@ -15,14 +15,14 @@ Si dispones del paquete portable de Song Sense, extrae el ZIP completo y abre `S
 1. Abre Spotify y reproduce una canción. Song Sense utiliza la sesión multimedia de Windows para detectarla; no necesita iniciar sesión en Spotify desde la app.
 2. Con el seguimiento automático activo, espera a que busque la letra en LRCLIB. También puedes usar **Buscar letra** en el menú de la canción.
 3. Si hay varias coincidencias, abre **Cambiar letra → Versiones** y confirma la correcta. En **Manual** puedes introducir o corregir una letra de hasta 20.000 caracteres.
-4. Abre **Cuenta**, configura un proveedor de IA y habilita las consultas.
-5. Selecciona el idioma en **Ajustes → Idioma** y pulsa **Traducir y explicar**. Consulta las pestañas **Letra y traducción** y **Significado**.
+4. Abre **Cuenta e IA**, configura un proveedor de IA y habilita las consultas.
+5. Selecciona el idioma en la barra de lectura; en compacto, usa **Menú → Opciones de lectura**. Pulsa **Traducir y explicar** y consulta las pestañas **Letra** y **Significado**.
 
 Cambiar de canción o de idioma no genera IA automáticamente. Los resultados compatibles guardados se recuperan sin una consulta nueva. Si el original ya está en el idioma elegido, no se duplica la traducción.
 
 ## Configurar IA y costes
 
-En **Cuenta** puedes elegir uno de estos modos:
+En **Cuenta e IA** puedes elegir uno de estos modos:
 
 - **ChatGPT:** conecta tu cuenta, consulta los modelos disponibles y selecciona uno. Para habilitar consultas, revisa el uso de créditos en **Gestionar uso en ChatGPT** y confirma el ajuste solicitado por la app. La confirmación dura esta sesión; Song Sense no puede verificar el ajuste externo ni garantizar cargos cero. La disponibilidad depende de la cuenta y del proveedor.
 - **API key · de pago:** introduce tu clave en el campo enmascarado de la app, el identificador del modelo y el límite diario de solicitudes. Guarda los ajustes y habilita IA. La API tiene facturación propia; una suscripción a ChatGPT no cubre ese consumo.
@@ -35,7 +35,7 @@ Los datos se guardan en `%LOCALAPPDATA%\SongSense`. Las credenciales se protegen
 
 Puedes borrar contenido desde la app. Borrar la caché conserva los ajustes y las credenciales; la desconexión de cuenta y la eliminación de API key se realizan por separado. Borrar el ZIP no elimina los datos locales. Evita ejecutar versiones distintas simultáneamente, ya que comparten esos datos.
 
-En **Ajustes** puedes cambiar el tamaño de lectura, activar **Siempre encima** y elegir **Mantener en bandeja al cerrar**. Si esta última opción está activa, cerrar la ventana mantiene la app abierta. Recupérala desde el icono de la bandeja y usa **Salir** para terminar el proceso.
+En **Preferencias** puedes cambiar el tamaño de lectura, activar **Siempre encima** y elegir **Mantener en bandeja al cerrar**. Si esta última opción está activa, cerrar la ventana mantiene la app abierta. Recupérala desde el icono de la bandeja y usa **Salir** para terminar el proceso.
 
 ## Compilar desde el repositorio
 

@@ -4,6 +4,7 @@ using System.Windows.Data;
 using System.Windows.Automation;
 using System.Windows.Input;
 using System.Text.RegularExpressions;
+using System.Windows.Documents;
 
 namespace SongSense.App;
 
@@ -12,6 +13,46 @@ public static class AuxiliaryContent
     public static string Sanitize(string text) => Regex.Replace(
         Regex.Replace(text, @"(?i)\bBearer\s+\S+|\bsk-[\w-]+", "[credencial omitida]"),
         @"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", "[cuenta omitida]");
+
+    public static FrameworkElement CreatePresentation(object source, string property, string title, string summary, bool sanitizeCopy = false, string? summaryProperty = null)
+    {
+        var panel = (DockPanel)Create(source, property, title, summary, sanitizeCopy, summaryProperty);
+        var text = panel.Children.OfType<TextBox>().Single(); panel.Children.Remove(text);
+        if (sanitizeCopy)
+        {
+            text.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
+            // The new local reading scope follows its disclosure in visual order.
+            // The old index belonged to the flat Copy / Back / body / header layout.
+            text.ClearValue(KeyboardNavigation.TabIndexProperty);
+            var detail = new Expander { Header = "Detalle técnico", Content = text };
+            var body = new ScrollViewer { Content = detail, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Focusable = false };
+            KeyboardNavigation.SetTabIndex(body, 2);
+            KeyboardNavigation.SetIsTabStop(body, false);
+            KeyboardNavigation.SetTabNavigation(body, KeyboardNavigationMode.Local);
+            panel.Children.Add(body);
+        }
+        else
+        {
+            var view = new RichTextBox { IsReadOnly = true, IsDocumentEnabled = true, BorderThickness = new Thickness(0), Background = System.Windows.Media.Brushes.Transparent, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+            KeyboardNavigation.SetTabIndex(view, 2);
+            view.SetResourceReference(Control.FontSizeProperty, "UiControlFont"); view.SetResourceReference(Control.ForegroundProperty, "Ink");
+            AutomationProperties.SetName(view, title + " · texto seleccionable");
+            void Refresh()
+            {
+                view.Document.Blocks.Clear();
+                foreach (var line in text.Text.Replace("\r\n", "\n").Split('\n'))
+                {
+                    var p = new Paragraph { Margin = new Thickness(0, 0, 0, 12) }; var colon = line.IndexOf(':');
+                    if (colon > 0) { p.Inlines.Add(new Bold(new Run(line[..(colon + 1)]))); p.Inlines.Add(new Run(line[(colon + 1)..])); }
+                    else p.Inlines.Add(new Run(line));
+                    view.Document.Blocks.Add(p);
+                }
+            }
+            text.TextChanged += (_, _) => Refresh(); Refresh(); panel.Children.Add(view);
+        }
+        panel.SizeChanged += (_, _) => { var window = Window.GetWindow(panel); panel.Margin = new Thickness(window?.ActualWidth < 600 ? 12 : 24); };
+        return panel;
+    }
 
     public static FrameworkElement Create(object source, string property, string title, string summary, bool sanitizeCopy = false, string? summaryProperty = null)
     {

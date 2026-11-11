@@ -495,10 +495,13 @@ public sealed class AiConfigurationTests : IDisposable
         void Edit(string value) { if (field == "Model") vm.Model = value; else vm.Limit = value; }
         Edit(field == "Model" ? "bad model" : "0"); await vm.SaveAsync(key);
         Assert.False(vm.IsDraftValid); Assert.Equal(field, vm.FirstInvalidField); Assert.Contains("inválido", vm.FormInstruction); Assert.False(vm.CanTest);
+        Assert.Equal(NoticePresentation.Attention, vm.FormPresentation);
         Edit(field == "Model" ? "corrected-model" : "30");
         Assert.True(vm.IsDraftValid); Assert.Null(vm.FirstInvalidField); Assert.True(vm.HasChanges); Assert.Contains("Guarda", vm.FormInstruction); Assert.False(vm.CanTest);
+        Assert.Equal(NoticePresentation.Contextual, vm.FormPresentation);
         Edit(initial);
         Assert.True(vm.IsDraftValid); Assert.Equal(newKey, vm.HasChanges); Assert.Equal(configured && !chat && !newKey, vm.CanTest);
+        Assert.Equal(newKey ? NoticePresentation.Contextual : NoticePresentation.Routine, vm.FormPresentation);
         if (newKey) Assert.Contains("Guarda", vm.FormInstruction);
         else { Assert.Contains("Sin cambios pendientes", vm.FormInstruction); Assert.DoesNotContain("Guarda antes", vm.Message); }
         Edit(field == "Model" ? "invalid again" : "101");

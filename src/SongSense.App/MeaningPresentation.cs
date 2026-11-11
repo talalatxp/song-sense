@@ -26,6 +26,7 @@ public sealed class MeaningPresentation : IDisposable
         this.view = view; summary = insight.Summary;
         summaryParagraph = Role(new Paragraph(summaryRun) { Tag = "metadata" }, ReadingTextRole.Content);
         ReadingAnchors.SetKey(summaryHeading, "meaning:summary-heading"); ReadingAnchors.SetKey(summaryParagraph, "meaning:summary-text"); ReadingAnchors.SetKey(summaryToggle, "meaning:summary-toggle");
+        ReadingDocument.SetSpaceRole(summaryHeading, ReadingSpaceRole.FirstHeading);
         Add(summaryHeading); Add(summaryParagraph);
         var more = new Hyperlink(new Run("Leer explicación completa")) { Focusable = true };
         KeyboardNavigation.SetIsTabStop(more, true);
@@ -43,29 +44,29 @@ public sealed class MeaningPresentation : IDisposable
         {
             Add(Heading("Temas"));
             var themes = Role(new List { Margin = new Thickness(0), MarkerStyle = TextMarkerStyle.Disc, Padding = new Thickness(24, 0, 0, 0) }, ReadingTextRole.Content);
-            foreach (var theme in insight.Themes) themes.ListItems.Add(new ListItem(new Paragraph(new Run(theme)) { Tag = "metadata" }));
+            foreach (var theme in insight.Themes) themes.ListItems.Add(new ListItem(Role(new Paragraph(new Run(theme)), ReadingTextRole.Content)));
             Add(themes);
         }
         AddDetails("MeaningMetaphors", $"Imágenes y metáforas · {insight.Metaphors.Count}", insight.Metaphors.Select(item =>
         {
-            var section = new Section();
-            section.Blocks.Add(Heading("Cita original"));
+            var section = new Section(); ReadingDocument.SetSpaceRole(section, ReadingSpaceRole.DetailEntry);
+            var citation = Heading("Cita original"); ReadingDocument.SetSpaceRole(citation, ReadingSpaceRole.FirstHeading); section.Blocks.Add(citation);
             var quote = new Paragraph(new Italic(new Run($"«{item.Text}»"))) { BorderThickness = new Thickness(2, 0, 0, 0), Padding = new Thickness(12, 0, 0, 0) };
-            quote.SetResourceReference(Block.BorderBrushProperty, "Gold"); section.Blocks.Add(quote);
+            quote.SetResourceReference(Block.BorderBrushProperty, "Gold"); ReadingDocument.SetSpaceRole(quote, ReadingSpaceRole.Body); section.Blocks.Add(quote);
             section.Blocks.Add(Heading("Interpretación de la imagen"));
-            section.Blocks.Add(new Paragraph(new Run(item.Explanation))); return section;
+            section.Blocks.Add(Role(new Paragraph(new Run(item.Explanation)), ReadingTextRole.Content)); return section;
         }).ToArray(), insight.Metaphors.FirstOrDefault()?.Text);
         AddDetails("MeaningAlternatives", $"Interpretaciones alternativas · {insight.Alternatives.Count}", insight.Alternatives.Select((text, index) =>
         {
-            var section = new Section(); section.Blocks.Add(Heading($"Lectura alternativa {index + 1}"));
-            section.Blocks.Add(new Paragraph(new Run(text))); return section;
+            var section = new Section(); ReadingDocument.SetSpaceRole(section, ReadingSpaceRole.DetailEntry); var title = Heading($"Lectura alternativa {index + 1}"); ReadingDocument.SetSpaceRole(title, ReadingSpaceRole.FirstHeading); section.Blocks.Add(title);
+            section.Blocks.Add(Role(new Paragraph(new Run(text)), ReadingTextRole.Content)); return section;
         }).ToArray(), insight.Alternatives.FirstOrDefault());
         if (insight.Warnings.Count > 0)
         {
             Add(Heading("Límites de esta interpretación"));
-            Add(new Paragraph(new Run("Límites generales del análisis; no están vinculados a una afirmación concreta.")));
+            Add(Role(new Paragraph(new Run("Límites generales del análisis; no están vinculados a una afirmación concreta.")), ReadingTextRole.Content));
             var limits = Role(new List { MarkerStyle = TextMarkerStyle.Disc, Padding = new Thickness(24, 0, 0, 0) }, ReadingTextRole.Content);
-            foreach (var warning in insight.Warnings) limits.ListItems.Add(new ListItem(new Paragraph(new Run(warning))));
+            foreach (var warning in insight.Warnings) limits.ListItems.Add(new ListItem(Role(new Paragraph(new Run(warning)), ReadingTextRole.Content)));
             Add(limits);
         }
         view.TypographyChanged += TypographyChanged;
@@ -74,12 +75,17 @@ public sealed class MeaningPresentation : IDisposable
     }
 
     private void Add(Block block) => view.Document.Blocks.Add(block);
-    private static T Role<T>(T block, ReadingTextRole role) where T : Block { ReadingDocument.SetTextRole(block, role); return block; }
+    private static T Role<T>(T block, ReadingTextRole role) where T : Block
+    {
+        ReadingDocument.SetTextRole(block, role);
+        ReadingDocument.SetSpaceRole(block, role == ReadingTextRole.Heading ? ReadingSpaceRole.SectionHeading : ReadingSpaceRole.Body);
+        return block;
+    }
     private static Paragraph Heading(string text) => Role(new Paragraph(new Run(text)) { Tag = "metadata" }, ReadingTextRole.Heading);
     private void AddDetails(string identity, string label, Section[] sections, string? hint)
     {
         if (sections.Length == 0) return;
-        var link = new Hyperlink(new Run(label + " ▸")) { Focusable = true }; var heading = Role(new Paragraph(link) { Tag = "metadata" }, ReadingTextRole.Navigation); Add(heading);
+        var link = new Hyperlink(new Run(label + " ▸")) { Focusable = true }; var heading = Role(new Paragraph(link) { Tag = "metadata" }, ReadingTextRole.Navigation); ReadingDocument.SetSpaceRole(heading, ReadingSpaceRole.SectionHeading); Add(heading);
         KeyboardNavigation.SetIsTabStop(link, true);
         link.SetResourceReference(TextElement.ForegroundProperty, "Gold");
         AutomationProperties.SetAutomationId(link, identity);
@@ -120,6 +126,9 @@ public sealed class MeaningPresentation : IDisposable
         var budget = measured.Height > 0 ? measured.Height * .35 : double.PositiveInfinity;
         var headingHeight = MeasureLabel("Resumen", measured.Width, summaryHeading.FontSize, FontWeights.SemiBold);
         var linkHeight = MeasureLabel("Leer explicación completa", measured.Width, summaryToggle.FontSize, FontWeights.Normal);
+        // A5-05: the 35% target must not remove every real sentence in small views.
+        // Preserve that budget when it fits; otherwise retain two content lines plus navigation.
+        budget = Math.Max(budget, headingHeight + linkHeight + measured.Font * 3);
         var whole = PreviewSummary(summary, measured.Width, measured.Font, Math.Max(0, budget - headingHeight));
         var preview = whole == summary ? summary : PreviewSummary(summary, measured.Width, measured.Font, Math.Max(0, budget - headingHeight - linkHeight));
         var text = expanded ? summary : preview;

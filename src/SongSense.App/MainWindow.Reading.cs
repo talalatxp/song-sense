@@ -37,6 +37,7 @@ public partial class MainWindow
     }
     private void ReadingModelChanged(object? s, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName is nameof(MainViewModel.Preparation) or nameof(MainViewModel.HasReadableOriginal) or nameof(MainViewModel.HasFailedLocalSave) or nameof(MainViewModel.TargetLanguage) or nameof(MainViewModel.TrackingPauseContext)) QueueMainComposition();
         if (e.PropertyName is nameof(MainViewModel.CurrentTrack) or nameof(MainViewModel.LyricsRevision) or nameof(MainViewModel.TargetLanguage) or nameof(MainViewModel.Insight) or nameof(MainViewModel.ReadingBlocks)) UpdateReadingDocument();
     }
     private void UpdateReadingDocument()
@@ -58,6 +59,7 @@ public partial class MainWindow
         if (updatingReadingMode || readingModel is null || !ReferenceEquals(e.OriginalSource, ReadingMode)) return;
         preferredReadingMode = Math.Clamp(ReadingMode.SelectedIndex, 0, 2);
         TranslationScroll.PreserveReadingPosition(BuildLyricsDocument);
+        QueueMainComposition();
         QueuePreferences();
     }
     private static string SourceLabel(string? code) => code switch
@@ -97,13 +99,13 @@ public partial class MainWindow
         meaningPresentation?.Dispose(); meaningPresentation = null;
         MeaningScroll.Document.Blocks.Clear();
         if (readingModel is not { } vm) return;
-        if (!vm.HasInsight) { AddHeader(MeaningScroll); AddReadingHint(MeaningScroll); }
+        if (!vm.HasInsight) { }
         else
         {
-            var identity = AddText(MeaningScroll, "Una interpretación posible, generada por IA", true);
-            ReadingDocument.SetTextRole(identity, ReadingTextRole.Heading);
+            var identity = AddText(MeaningScroll, "Lectura posible · IA", true);
+            ReadingDocument.SetTextRole(identity, ReadingTextRole.Secondary);
+            ReadingDocument.SetSpaceRole(identity, ReadingSpaceRole.Provenance);
             identity.SetResourceReference(TextElement.ForegroundProperty, "Ink");
-            AddHeader(MeaningScroll);
             meaningPresentation = new MeaningPresentation(MeaningScroll, vm.Insight!);
         }
         MeaningScroll.Selection.Select(MeaningScroll.Document.ContentStart, MeaningScroll.Document.ContentStart);
@@ -122,7 +124,8 @@ public partial class MainWindow
             1 => $"Traducción · {OutputLanguages.Get(vm.TargetLanguage).Name}",
             2 => $"Original · {SourceLabel(vm.IdentifiedSourceLanguage)} / Traducción · {OutputLanguages.Get(vm.TargetLanguage).Name}",
             _ => $"Original · {SourceLabel(vm.IdentifiedSourceLanguage)}" };
-        AddText(TranslationScroll, identity, true).Tag = "metadata";
+        // The reading controls already identify mode and language beside the action.
+        if (!readingContextInControls) AddText(TranslationScroll, identity, true).Tag = "metadata";
         var stanza = 0;
         foreach (var block in vm.ReadingBlocks)
         {
@@ -139,7 +142,7 @@ public partial class MainWindow
         }
         if (!translated && vm.Insight is { } insight && insight.Language == insight.TargetLanguage)
             AddText(TranslationScroll, "El original ya está en el idioma de destino; se muestra una sola vez.", true).Tag = "metadata";
-        if (!vm.HasPreparedLyrics) AddReadingHint(TranslationScroll);
+
         if (vm.HasPreparedLyrics) AddSource(TranslationScroll, vm);
         TranslationScroll.Selection.Select(TranslationScroll.Document.ContentStart, TranslationScroll.Document.ContentStart);
         UpdateReadingTypography();

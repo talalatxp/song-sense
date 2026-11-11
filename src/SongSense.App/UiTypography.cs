@@ -9,6 +9,14 @@ public static class UiTypography
     public static void Apply(ResourceDictionary resources, double scale)
     {
         scale = double.IsFinite(scale) ? Math.Clamp(scale, 1, 2.25) : 1;
+        resources["UiExpanderContentInset"] = new Thickness(24d * scale + 14, 12, 0, 0);
+        resources["UiIconStroke"] = 1.6d * scale;
+        resources["UiIconSize"] = 20d * scale;
+        resources["UiIconColumn"] = 24d * scale;
+        resources["UiChevronSize"] = 12d * scale;
+        resources["UiFirstLineHeight"] = 24d * scale;
+        resources["UiControlMinimum"] = Math.Max(40, 14d * scale * 1.5 + 16);
+        resources["UiCompactMinimum"] = Math.Max(36, 14d * scale * 1.5 + 12);
         resources["UiControlFont"] = 14d * scale;
         resources["UiInstructionFont"] = 13d * scale;
         resources["UiSecondaryFont"] = 12d * scale;

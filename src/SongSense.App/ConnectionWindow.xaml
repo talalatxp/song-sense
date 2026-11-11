@@ -1,57 +1,54 @@
-<Window x:Class="SongSense.App.ConnectionWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:ui="clr-namespace:SongSense.App" Title="Cuenta y consumo · Song Sense" Width="640" Height="800" MinWidth="360" MinHeight="480" WindowStartupLocation="CenterOwner" Background="{DynamicResource Canvas}" Foreground="{DynamicResource Ink}" FontFamily="Segoe UI" Icon="pack://application:,,,/SongSense;component/Assets/SongSense.ico">
+<Window x:Class="SongSense.App.ConnectionWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:ui="clr-namespace:SongSense.App" Title="Cuenta e IA · Song Sense" Width="640" Height="800" MinWidth="360" MinHeight="480" SizeChanged="AdaptLayout" WindowStartupLocation="CenterOwner" Background="{DynamicResource Canvas}" Foreground="{DynamicResource Ink}" FontFamily="Segoe UI" Icon="pack://application:,,,/SongSense;component/Assets/SongSense.ico">
  <Window.Resources><BooleanToVisibilityConverter x:Key="BoolVis"/></Window.Resources>
- <ScrollViewer x:Name="ConnectionOuterScroll" Margin="16" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><DockPanel Height="{Binding ViewportHeight, ElementName=ConnectionOuterScroll}" MinHeight="{DynamicResource UiMainMinimumHeight}">
-  <TextBlock DockPanel.Dock="Top" Text="Cuenta y consumo" FontFamily="Georgia" FontSize="{DynamicResource UiHeading24}" Foreground="{DynamicResource Gold}" Margin="0,0,0,8"/>
-  <StackPanel DockPanel.Dock="Top">   <TextBlock Text="{Binding StepTitle}" FontSize="{DynamicResource UiHeading18}" FontWeight="SemiBold" Margin="0,4,0,4" Foreground="{DynamicResource Gold}"/>
-   <TextBlock Text="{Binding SessionSummary}" FontSize="{DynamicResource UiInstructionFont}"/>
-   <StackPanel x:Name="ConnectStep" Visibility="{Binding IsConnectStep, Converter={StaticResource BoolVis}}">
-    <TextBlock Text="{Binding PendingAccountMessage}" FontSize="{DynamicResource UiInstructionFont}" Margin="0,4,0,4"/>
-   </StackPanel>
+ <ScrollViewer x:Name="ConnectionOuterScroll" Margin="24" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel>
+  <TextBlock Text="Cuenta e IA" FontFamily="Georgia" FontSize="{DynamicResource UiHeading24}" Margin="0,0,0,24"/>
+  <StackPanel x:Name="ActiveStep">
+   <TextBlock Text="{Binding StepTitle}" FontSize="{DynamicResource UiHeading18}" FontWeight="SemiBold" Margin="0,0,0,8"/>
+   <TextBlock Text="{Binding SessionSummary}" Margin="0,0,0,16"/>
+   <StackPanel x:Name="ConnectStep" Visibility="{Binding IsConnectStep, Converter={StaticResource BoolVis}}"><TextBlock Text="{Binding PendingAccountMessage}" Style="{StaticResource OptionalText}"/></StackPanel>
    <StackPanel x:Name="ModelStep" Visibility="{Binding IsModelStep, Converter={StaticResource BoolVis}}">
-    <TextBlock x:Name="CatalogResult" Text="{Binding ModelMessage}" FontSize="{DynamicResource UiInstructionFont}" AutomationProperties.LiveSetting="Polite" Margin="0,4,0,4"/>
-    <ComboBox x:Name="ModelSelection" Visibility="{Binding HasModels, Converter={StaticResource BoolVis}}" ItemsSource="{Binding Models}" DisplayMemberPath="DisplayName" SelectedValuePath="Slug" SelectedValue="{Binding SelectedModel}" IsEnabled="{Binding CanSelectModel}" AutomationProperties.Name="Modelo autorizado por ChatGPT" Margin="0,4,0,4"/>
+    <TextBlock x:Name="CatalogResult" Text="{Binding ModelMessage}" AutomationProperties.LiveSetting="Polite" Margin="0,0,0,8"/>
+    <Grid Visibility="{Binding HasModels, Converter={StaticResource BoolVis}}">
+     <ComboBox x:Name="ModelSelection" ItemsSource="{Binding Models}" DisplayMemberPath="DisplayName" SelectedValuePath="Slug" SelectedValue="{Binding SelectedModel}" IsEnabled="{Binding CanSelectModel}" AutomationProperties.Name="Modelo autorizado por ChatGPT" AutomationProperties.HelpText="Selecciona un modelo disponible; no se elige ni guarda automáticamente."/>
+     <TextBlock x:Name="ModelPlaceholder" Text="Selecciona un modelo" Margin="12,0,36,0" VerticalAlignment="Center" IsHitTestVisible="False" Foreground="{DynamicResource Muted}"><TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding SelectedItem, ElementName=ModelSelection}" Value="{x:Null}"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+    </Grid>
    </StackPanel>
    <StackPanel x:Name="ConfirmStep" Visibility="{Binding IsConfirmStep, Converter={StaticResource BoolVis}}">
-
+    <TextBlock Text="Antes de habilitar consultas" FontWeight="SemiBold" Margin="0,0,0,8"/>
     <TextBlock x:Name="CreditsWarning" Text="La app no verifica el ajuste de créditos ni garantiza cargos cero. Revisa Uso en ChatGPT antes de habilitar."/>
-    <Button x:Name="ManageUsageButton" Content="Gestionar uso en ChatGPT" Click="ManageUsage" HorizontalAlignment="Left" Padding="8,5" Margin="0,4,0,4"/>
-    <CheckBox x:Name="CreditsConfirmation" IsChecked="{Binding CreditsDisabledConfirmed, UpdateSourceTrigger=PropertyChanged}"><TextBlock Text="He desactivado el uso de créditos para esta cuenta y Song Sense" TextWrapping="Wrap"/></CheckBox>
-    <Button x:Name="ConfirmEnableButton" Content="{Binding PrimaryLabel}" Click="NextStep" IsEnabled="{Binding CanPrimary}" Style="{StaticResource PrimaryButton}" Padding="8,5" Margin="0,4,0,4" HorizontalAlignment="Left"/>
-
+    <Button x:Name="ManageUsageButton" Content="Gestionar uso en ChatGPT" Click="ManageUsage" Style="{StaticResource QuietButton}" HorizontalAlignment="Left" Margin="0,8,0,8"/>
+    <CheckBox x:Name="CreditsConfirmation" IsChecked="{Binding CreditsDisabledConfirmed, UpdateSourceTrigger=PropertyChanged}"><TextBlock Text="He desactivado el uso de créditos para esta cuenta y Song Sense"/></CheckBox>
+    <Button x:Name="ConfirmEnableButton" Content="{Binding PrimaryLabel}" Click="NextStep" IsEnabled="{Binding CanPrimary}" Style="{StaticResource PrimaryButton}" Margin="0,16,0,0" HorizontalAlignment="Left"/>
    </StackPanel>
-</StackPanel>
-  <ScrollViewer DockPanel.Dock="Bottom" MaxHeight="200" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel x:Name="ActionFooter" Margin="0,8,0,0">
-   <StackPanel Visibility="{Binding IsOperating, Converter={StaticResource BoolVis}}" AutomationProperties.LiveSetting="Polite">
-    <TextBlock Text="{Binding OperationTitle}" FontSize="{DynamicResource UiInstructionFont}"/>
-    <ProgressBar IsIndeterminate="True" Height="4" Margin="0,4,0,6" AutomationProperties.Name="{Binding OperationTitle}"/>
+   <StackPanel x:Name="ActionFooter" Margin="0,16,0,0">
+    <StackPanel Visibility="{Binding IsOperating, Converter={StaticResource BoolVis}}" AutomationProperties.LiveSetting="Polite"><TextBlock Text="{Binding OperationTitle}"/><ProgressBar IsIndeterminate="True" Height="4" Margin="0,8,0,8" AutomationProperties.Name="{Binding OperationTitle}"/></StackPanel>
+    <TextBlock Text="{Binding PrimaryReason}" Margin="0,0,0,16"><TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}"><Style.Triggers><DataTrigger Binding="{Binding IsConfirmStep}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+    <ui:ActionPanel>
+     <Button x:Name="NextButton" Content="{Binding PrimaryLabel}" Click="NextStep" IsEnabled="{Binding CanPrimary}"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}"><Style.Triggers><DataTrigger Binding="{Binding IsConfirmStep}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
+     <Button Content="Cancelar operación" Click="CancelOperation" IsEnabled="{Binding CanCancel}" Visibility="{Binding CanCancel, Converter={StaticResource BoolVis}}" Style="{StaticResource QuietButton}"/>
+    </ui:ActionPanel>
+    <ui:StatusNotice Visibility="{Binding ShowOperationResult, Converter={StaticResource BoolVis}}" Message="{Binding Message}" Kind="{Binding MessageKind}" Margin="0,16,0,0"/>
    </StackPanel>
-   <TextBlock Text="{Binding PrimaryReason}" FontSize="{DynamicResource UiInstructionFont}" Margin="0,0,0,4"><TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}"><Style.Triggers><DataTrigger Binding="{Binding IsConfirmStep}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding IsModelStep}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
-   <WrapPanel><Button x:Name="NextButton" Content="{Binding PrimaryLabel}" Click="NextStep" IsEnabled="{Binding CanPrimary}" FontSize="{DynamicResource UiControlFont}" Padding="8,6" Margin="0,0,6,4"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}"><Style.Triggers><DataTrigger Binding="{Binding IsConfirmStep}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Button.Style></Button><Button Content="Cancelar" Click="CancelOperation" IsEnabled="{Binding CanCancel}" Visibility="{Binding CanCancel, Converter={StaticResource BoolVis}}" FontSize="{DynamicResource UiControlFont}" Padding="8,6" Margin="0,0,6,4"/></WrapPanel>
-   <ui:StatusNotice Visibility="{Binding ShowOperationResult, Converter={StaticResource BoolVis}}" Message="{Binding Message}" Kind="{Binding MessageKind}" IsCompact="False" FontSize="{DynamicResource UiInstructionFont}"/>
-  </StackPanel></ScrollViewer>
-  <ScrollViewer x:Name="StepsScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel Margin="0,0,8,0" IsEnabled="{Binding CanManage}">
-   <Expander x:Name="ConfigurationGroup" Header="Configuración" Margin="0,0,0,8"><StackPanel>
-   <RadioButton Content="Mi plan de ChatGPT" IsChecked="{Binding IsChatGptMode, Mode=OneWay}" Click="UseChatGpt" GroupName="AiMode" Margin="0,8,0,6"/>
-   <RadioButton Content="API de pago · facturación independiente" IsChecked="{Binding IsApiMode, Mode=OneWay}" Click="UseApiKey" GroupName="AiMode" Margin="0,0,0,8"/>
-   <WrapPanel><Button Content="Revisar cuenta" Click="ReviewAccount" Style="{StaticResource QuietButton}" FontSize="{DynamicResource UiControlFont}"/><Button Content="Cambiar modelo" Click="ReviewModel" IsEnabled="{Binding CanLoadModels}" Style="{StaticResource QuietButton}" FontSize="{DynamicResource UiControlFont}" Margin="6,0,0,0"/></WrapPanel>
-   <Expander Header="Avanzado · cuentas y reparación" Margin="0,16,0,12"><StackPanel>
-    <StackPanel Visibility="{Binding ShowAccountSelector, Converter={StaticResource BoolVis}}"><ComboBox ItemsSource="{Binding Accounts}" DisplayMemberPath="Label" SelectedValuePath="ClientId" SelectedValue="{Binding SelectedClientId}" AutomationProperties.Name="Cuentas ChatGPT"/><Button Content="Usar cuenta seleccionada" Click="SelectAccount" IsEnabled="{Binding CanSelectAccount}" HorizontalAlignment="Left"/></StackPanel>
-    <Button Content="Añadir otra cuenta" Click="AddAccount" IsEnabled="{Binding CanAddAccount}" HorizontalAlignment="Left"/>
-    <Button Content="Conectar una cuenta distinta" Click="ChangePendingAccount" IsEnabled="{Binding CanChangePendingAccount}" HorizontalAlignment="Left"/>
-    <Button Content="Actualizar catálogo de modelos" Click="LoadModels" IsEnabled="{Binding CanLoadModels}" HorizontalAlignment="Left"/>
-    <Button Content="Pausar consultas con ChatGPT" Click="PausePlan" IsEnabled="{Binding CanPausePlan}" HorizontalAlignment="Left"/>
-    <Button Content="Desconectar cuenta" Click="Disconnect" IsEnabled="{Binding CanDisconnect}" HorizontalAlignment="Left"/>
-    <TextBlock Text="La confirmación de créditos no se recupera como una aceptación permanente. El modo API se elige explícitamente; nunca actúa como alternativa automática." FontSize="{DynamicResource UiInstructionFont}" Margin="0,8,0,0"/>
-   </StackPanel></Expander>
+  </StackPanel>
+  <StackPanel x:Name="StepsScroll" Margin="0,24,0,0" IsEnabled="{Binding CanManage}">
+   <Expander x:Name="ConfigurationGroup" Header="Configuración" Margin="0,0,0,24"><StackPanel>
+    <RadioButton Content="Mi plan de ChatGPT" IsChecked="{Binding IsChatGptMode, Mode=OneWay}" Click="UseChatGpt" GroupName="AiMode" Margin="0,0,0,8"/>
+    <RadioButton Content="API de pago · facturación independiente" IsChecked="{Binding IsApiMode, Mode=OneWay}" Click="UseApiKey" GroupName="AiMode" Margin="0,0,0,16"/>
+    <ui:ActionPanel><Button Content="Revisar cuenta" Click="ReviewAccount" Style="{StaticResource QuietButton}"/><Button Content="Cambiar modelo" Click="ReviewModel" IsEnabled="{Binding CanLoadModels}" Style="{StaticResource QuietButton}"/></ui:ActionPanel>
+    <Expander x:Name="AdvancedGroup" Header="Avanzado" Margin="0,24,0,0"><StackPanel>
+     <TextBlock Text="Cuentas" FontWeight="SemiBold" Margin="0,0,0,8"/>
+     <StackPanel Visibility="{Binding ShowAccountSelector, Converter={StaticResource BoolVis}}"><ComboBox ItemsSource="{Binding Accounts}" DisplayMemberPath="Label" SelectedValuePath="ClientId" SelectedValue="{Binding SelectedClientId}" AutomationProperties.Name="Cuentas ChatGPT" Margin="0,0,0,8"/><Button Content="Usar cuenta seleccionada" Click="SelectAccount" IsEnabled="{Binding CanSelectAccount}" HorizontalAlignment="Left" Margin="0,0,0,8"/></StackPanel>
+     <ui:ActionPanel><Button Content="Añadir otra cuenta" Click="AddAccount" IsEnabled="{Binding CanAddAccount}"/><Button Content="Conectar una cuenta distinta" Click="ChangePendingAccount" IsEnabled="{Binding CanChangePendingAccount}"/></ui:ActionPanel>
+     <TextBlock Text="Catálogo" FontWeight="SemiBold" Margin="0,24,0,8"/><Button Content="Actualizar catálogo de modelos" Click="LoadModels" IsEnabled="{Binding CanLoadModels}" HorizontalAlignment="Left"/>
+     <TextBlock Text="Sesión" FontWeight="SemiBold" Margin="0,24,0,8"/><ui:ActionPanel><Button Content="Pausar consultas con ChatGPT" Click="PausePlan" IsEnabled="{Binding CanPausePlan}"/><Button Content="Desconectar cuenta" Click="Disconnect" IsEnabled="{Binding CanDisconnect}" Style="{StaticResource DangerButton}"/></ui:ActionPanel>
+     <TextBlock Text="La confirmación de créditos no se recupera como una aceptación permanente. El modo API se elige explícitamente; nunca actúa como alternativa automática." Margin="0,8,0,0"/>
+    </StackPanel></Expander>
    </StackPanel></Expander>
    <Expander x:Name="ActivityHelpGroup" Header="Actividad y ayuda"><StackPanel>
-    <TextBlock Text="{Binding Activity.LastActivity}" FontSize="{DynamicResource UiInstructionFont}"/>
-    <TextBlock Text="{Binding Activity.Counter}" FontSize="{DynamicResource UiInstructionFont}"/>
-    <TextBlock Text="{Binding ModeDescription}" FontSize="{DynamicResource UiInstructionFont}"/>
-    <TextBlock Text="La confirmación se solicita al reiniciar. Si cambias el permiso en ChatGPT, pausa las consultas aquí. La app no pasa automáticamente a API de pago. Los tokens no indican un porcentaje del plan; los límites pueden compartirse con otras aplicaciones." FontSize="{DynamicResource UiInstructionFont}"/>
-    <Button Content="Gestionar uso en ChatGPT" Click="ManageUsage" HorizontalAlignment="Left"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Style.Triggers><DataTrigger Binding="{Binding IsConfirmStep}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
-    <Button Content="Diagnóstico" Click="OpenDiagnostic" HorizontalAlignment="Left"/>
+    <TextBlock Text="{Binding Activity.LastActivity}" Margin="0,0,0,8"/><TextBlock Text="{Binding Activity.Counter}" Margin="0,0,0,8"/><TextBlock Text="{Binding ModeDescription}" Margin="0,0,0,8"/>
+    <TextBlock Text="La confirmación se solicita al reiniciar. Si cambias el permiso en ChatGPT, pausa las consultas aquí. La app no pasa automáticamente a API de pago. Los tokens no indican un porcentaje del plan; los límites pueden compartirse con otras aplicaciones." Margin="0,0,0,16"/>
+    <ui:ActionPanel><Button Content="Gestionar uso en ChatGPT" Click="ManageUsage"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource QuietButton}"><Style.Triggers><DataTrigger Binding="{Binding IsConfirmStep}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Button.Style></Button><Button Content="Diagnóstico" Click="OpenDiagnostic" Style="{StaticResource QuietButton}"/></ui:ActionPanel>
    </StackPanel></Expander>
-  </StackPanel></ScrollViewer>
- </DockPanel></ScrollViewer>
+  </StackPanel>
+ </StackPanel></ScrollViewer>
 </Window>

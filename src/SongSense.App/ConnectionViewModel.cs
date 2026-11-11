@@ -44,7 +44,7 @@ public sealed partial class ConnectionViewModel : INotifyPropertyChanged, IDispo
     });
     public Task PausePlanAsync() => RunAsync(ConnectionOperation.PauseSession, async token => { await connection.SetPlanUseAsync(false, token); message = "Consultas con ChatGPT pausadas."; });
     public string Status => connection.Status;
-    public string Account => connection.AccountLabel;
+    public string Account => connection.AccountIdentity;
     public string Message => message;
     public bool CanManage => !busy && !session.IsCancellationRequested;
     public bool CanDisconnect => CanManage && connection.Connected;
@@ -140,7 +140,7 @@ public sealed partial class ConnectionViewModel : INotifyPropertyChanged, IDispo
     {
         await connection.SetModeAsync(mode, token);
         CreditsDisabledConfirmed = false;
-        message = mode == AiConnectionMode.ApiKey ? "Has elegido API key · de pago. Configura la clave, el modelo y el aviso de costes en Ajustes de API. Usa una cuenta de facturación de API independiente de la suscripción." : "Modo ChatGPT. Revisa el uso de créditos y habilita las consultas con tu plan.";
+        message = mode == AiConnectionMode.ApiKey ? "Has elegido API key · de pago. Configura la clave, el modelo y el aviso de costes en API de pago. Usa una cuenta de facturación de API independiente de la suscripción." : "Modo ChatGPT. Revisa el uso de créditos y habilita las consultas con tu plan.";
     });
     public Task DisconnectAsync() => RunAsync(ConnectionOperation.Disconnect, async token =>
     {

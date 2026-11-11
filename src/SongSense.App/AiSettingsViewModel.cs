@@ -157,7 +157,7 @@ public sealed partial class AiSettingsViewModel(AiConfigurationService service, 
     public static string Describe(AiException error, bool chatGpt)
     {
         var message = chatGpt && error.Failure == AiFailure.Authentication
-            ? "OpenAI rechazó el acceso de esta sesión de ChatGPT. Revisa Cuenta y consumo."
+            ? "OpenAI rechazó el acceso de esta sesión de ChatGPT. Revisa Cuenta e IA."
             : chatGpt && error.Failure == AiFailure.RateLimited
             ? "OpenAI ha limitado el uso del plan. Las consultas quedan pausadas; no habrá reintento automático."
             : Describe(error.Failure);
@@ -176,7 +176,7 @@ public sealed partial class AiSettingsViewModel(AiConfigurationService service, 
     public static string Describe(AiFailure failure) => failure switch
     {
         AiFailure.Disabled => "La IA está desactivada. Lee el aviso, actívala y guarda antes de probar.",
-        AiFailure.PlanSafetyUnverified => "Consultas con ChatGPT pausadas. Revisa Cuenta y consumo, confirma que has desactivado el uso de créditos y habilita las consultas con tu plan. No se utilizará una API key automáticamente.",
+        AiFailure.PlanSafetyUnverified => "Consultas con ChatGPT pausadas. Revisa Cuenta e IA, confirma que has desactivado el uso de créditos y habilita las consultas con tu plan. No se utilizará una API key automáticamente.",
         AiFailure.SessionExpired => "La sesión de ChatGPT caducó o fue revocada. Sus tokens ya no se utilizan; vuelve a conectar la cuenta.",
         AiFailure.MissingKey => "Falta una clave. Introdúcela en el campo enmascarado y guarda.",
         AiFailure.InvalidSettings => "Revisa los ajustes: modelo explícito sin espacios (máximo 120 caracteres; no pegues la clave aquí), clave de hasta 512 caracteres sin espacios, límite entero de 1 a 100 y aviso aceptado antes de activar IA. No se recortan valores.",

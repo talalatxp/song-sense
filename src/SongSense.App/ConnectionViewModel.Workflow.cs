@@ -16,9 +16,9 @@ public sealed partial class ConnectionViewModel
     public bool ShowAccountSelector => Accounts.Count > 1;
     public bool CanSelectAccount => CanManage && Accounts.Any(a => a.ClientId == SelectedClientId);
     public string StepTitle => Step switch { 1 => "1 · Conectar cuenta", 2 => "2 · Elegir modelo", 3 => "3 · Habilitar esta sesión", 4 => "Sesión preparada", _ => "API de pago seleccionada" };
-    public string SessionSummary => IsApiMode ? "La clave y el modelo de API se configuran en Ajustes de API. No se utiliza el modelo de ChatGPT." : $"Cuenta: {Account}\nModelo guardado: {connection.Model ?? "sin elegir"}";
+    public string SessionSummary => IsApiMode ? "La clave y el modelo de API se configuran en API de pago. No se utiliza el modelo de ChatGPT." : $"Cuenta: {Account}\nModelo guardado: {connection.Model ?? "sin elegir"}\nSesión: {(connection.PlanUseEnabled ? "consultas habilitadas" : "consultas sin habilitar")}";
     public string ModeDescription => IsApiMode ? "Modo activo: API de pago. Usa facturación de API independiente de la suscripción. No se envía una prueba al elegir este modo." : "Modo activo: ChatGPT. Requiere permiso del plan y confirmación de créditos desactivados en cada sesión. Elegir el modo no genera análisis.";
-    public string PrimaryLabel => Step switch { 1 => connection.HasPendingRegistration ? "Continuar registro pendiente" : "Continuar con ChatGPT", 2 => Models.Count == 0 ? CatalogState == ModelCatalogState.NotRequested ? "Consultar modelos" : "Consultar de nuevo" : "Guardar modelo seleccionado", 3 => "Habilitar consultas con mi plan", 4 => "Volver a lectura", _ => "Abrir ajustes de API de pago" };
+    public string PrimaryLabel => Step switch { 1 => connection.HasPendingRegistration ? "Continuar registro pendiente" : "Continuar con ChatGPT", 2 => Models.Count == 0 ? CatalogState == ModelCatalogState.NotRequested ? "Consultar modelos" : "Consultar de nuevo" : "Guardar modelo seleccionado", 3 => "Habilitar consultas con mi plan", 4 => "Volver a lectura", _ => "Abrir API de pago" };
     public bool CanPrimary => CanManage && (Step != 2 || Models.Count == 0 || CanSaveModel) && (Step != 3 || CanEnablePlan);
     public string PrimaryReason => busy ? Operation switch
     {
@@ -31,10 +31,10 @@ public sealed partial class ConnectionViewModel
         2 => !HasModels ? "Consulta el catálogo para elegir un modelo. No se genera un análisis." : !CanSaveModel ? "Selecciona un modelo disponible antes de guardarlo." : "Guarda el modelo seleccionado y revisa la habilitación de esta sesión.",
         3 => !CreditsDisabledConfirmed ? "Confirma el ajuste externo de créditos para habilitar esta sesión." : "Habilita las consultas para esta sesión. No se genera un análisis al habilitar.",
         4 => "La sesión está habilitada. Vuelve a lectura para generar cuando tú lo decidas.",
-        _ => "Configura la clave y el modelo en Ajustes de API de pago. No se envía una prueba al abrirlos."
+        _ => "Configura la clave y el modelo en API de pago. No se envía una prueba al abrirlos."
     };
     private AiException? DiagnosticFailure => operationFailure ?? connection.CatalogFailure;
-    public string DiagnosticDetails => $"Modo: {connection.Mode}\nEstado: {connection.Readiness}\nOperación: {Operation}\nEn curso: {busy}\nÚltimo acceso: {connection.LoginOutcome}\nFallo: {DiagnosticFailure?.Failure ?? connection.LoginFailure}\nEtapa: {DiagnosticFailure?.AuthenticationStep ?? connection.LoginStep}\nCódigo: {DiagnosticFailure?.OAuthCode ?? connection.LoginCode}\nHTTP: {(DiagnosticFailure?.HttpStatus ?? connection.LoginHttpStatus)?.ToString() ?? "no comunicado"}\nCatálogo: {CatalogState} · {Models.Count} modelos";
+    public string DiagnosticDetails => $"Modo: {connection.Mode}\nRegistro: {connection.AccountLabel}\nEstado: {connection.Readiness}\nOperación: {Operation}\nEn curso: {busy}\nÚltimo acceso: {connection.LoginOutcome}\nFallo: {DiagnosticFailure?.Failure ?? connection.LoginFailure}\nEtapa: {DiagnosticFailure?.AuthenticationStep ?? connection.LoginStep}\nCódigo: {DiagnosticFailure?.OAuthCode ?? connection.LoginCode}\nHTTP: {(DiagnosticFailure?.HttpStatus ?? connection.LoginHttpStatus)?.ToString() ?? "no comunicado"}\nCatálogo: {CatalogState} · {Models.Count} modelos";
     public void Review(int step) { if (busy || step is < 1 or > 3 || step > 1 && !connection.PlanGranted || step == 3 && !AiSettingsRules.IsValidModel(connection.Model)) return; ClearOperationResult(); reviewStep = step; NotifyWorkflow(); }
     public Task PrimaryAsync() => Step switch { 1 => ConnectAsync(false), 2 => Models.Count == 0 ? ModelsAsync() : SelectModelAsync(), 3 => EnablePlanAsync(), _ => Task.CompletedTask };
     private void NotifyWorkflow()

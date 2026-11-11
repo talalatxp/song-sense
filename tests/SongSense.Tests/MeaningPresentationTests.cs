@@ -78,7 +78,7 @@ public sealed class MeaningPresentationTests
         Assert.Equal(21.98, heading.FontSize, 6);
     });
     [Fact]
-    public void SummaryReinsertedAfterSmallViewportUsesTheNewReadingSize() => Sta(() =>
+    public void SmallViewportRetainsRealSummaryAndResizingUsesTheNewReadingSize() => Sta(() =>
     {
         var view = new ReadingDocument(); view.SetPointSize(12);
         using var presentation = new MeaningPresentation(view, Result(string.Join(' ', Enumerable.Repeat("Una oportunidad para observar la luz.", 70))));
@@ -94,7 +94,7 @@ public sealed class MeaningPresentationTests
         try
         {
             window.Show(); Flush();
-            Assert.DoesNotContain(view.Document.Blocks.OfType<Paragraph>(), p => ReadingAnchors.GetKey(p) == "meaning:summary-text");
+            Assert.Contains(view.Document.Blocks.OfType<Paragraph>(), p => ReadingAnchors.GetKey(p) == "meaning:summary-text");
             view.SetPointSize(24); window.Height = 800; Flush();
             var paragraph = Assert.Single(view.Document.Blocks.OfType<Paragraph>(), p => ReadingAnchors.GetKey(p) == "meaning:summary-text");
             Assert.Equal(32, paragraph.FontSize); Assert.Equal(48, paragraph.LineHeight);
@@ -170,5 +170,20 @@ public sealed class MeaningPresentationTests
         var selection = view.Selection.Text; var document = view.Document;
         view.SetPointSize(24);
         Assert.Equal(selection, view.Selection.Text); Assert.Same(document, view.Document); Assert.Equal(summary, result.Summary);
+    });
+    [Fact]
+    public void EditorialSpacingSurvivesTypographyAndDoesNotDependOnMetadataTag() => Sta(() =>
+    {
+        var view = new ReadingDocument(); using var presentation = new MeaningPresentation(view, Result("Resumen propio", 1));
+        foreach (var link in Links(view).ToArray()) Click(link);
+        var paragraphs = Paragraphs(view.Document.Blocks).ToArray();
+        foreach (var paragraph in paragraphs) paragraph.Tag = "metadata";
+        view.SetPointSize(24);
+        var themes = paragraphs.Single(p => new TextRange(p.ContentStart, p.ContentEnd).Text.Trim() == "Temas");
+        Assert.Equal(new Thickness(0, 24, 0, 8), themes.Margin);
+        var explanation = paragraphs.Single(p => new TextRange(p.ContentStart, p.ContentEnd).Text.Trim() == "Explicación 1");
+        Assert.Equal(new Thickness(0), explanation.Margin);
+        Assert.Equal(32, explanation.FontSize);
+        Assert.Contains("«Cita 1»", Text(view));
     });
 }

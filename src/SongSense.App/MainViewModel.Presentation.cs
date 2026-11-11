@@ -30,7 +30,12 @@ public sealed partial class MainViewModel
         HasQuota = HasQuota, Used = TodayRequests, Limit = aiSettings.DailyRequestLimit, Date = LocalDate,
         EditAllowed = CurrentTrack is not null && !lifetime.IsCancellationRequested && (cache is null || storageReady && !StorageError)
     });
-    public NoticeKind DisplayNoticeKind => Preparation.Kind;
+    public NoticeKind DisplayNoticeKind => Preparation.Kind == NoticeKind.Success && Preparation.Blockers.Any(b => b.Cause != PreparationCause.LanguageSaving) ? NoticeKind.Warning : Preparation.Kind;
+    public NoticePresentation PreparationPresentation => Preparation.Kind is NoticeKind.Error or NoticeKind.Warning || Preparation.Blockers.Any(b => b.Cause != PreparationCause.LanguageSaving) ? NoticePresentation.Attention
+        : Preparation.Cause is PreparationCause.Analysing or PreparationCause.Searching or PreparationCause.AiCancelled or PreparationCause.LyricsCancelled or PreparationCause.Initializing ? NoticePresentation.Contextual : NoticePresentation.Routine;
+    public string OperationFeedback => Preparation.Cause == PreparationCause.AiCancelled
+        ? "Cancelado · letra conservada\n" + (Usage.State == AiUsageState.Comunicado && Usage.Tokens is { } tokens ? $"{tokens.TotalTokens:N0} tokens comunicados" : "Consumo no comunicado")
+        : Preparation.Action == PreparationAction.CancelAnalysis ? "Analizando · puede consumir tokens" : "Buscando letra · sin solicitar IA";
     public string DisplayStatus => Preparation.Status;
     public string DisplayNotice => Preparation.Message;
     public string ReadingHint => Preparation.Message;
@@ -46,12 +51,14 @@ public sealed partial class MainViewModel
     public string PreparationNoticeDetails => ShowDiagnostic || Preparation.Cause == PreparationCause.Result && Preparation.Blockers.Count > 0 ? DiagnosticDetails : Preparation.Message;
     public string PreparationSummary => Preparation.Cause switch
     {
+        PreparationCause.Analysing => "Analizando · puede consumir tokens.",
+        PreparationCause.Searching => "Buscando letra · sin consulta de IA.",
         PreparationCause.Storage => "No se pudo abrir el almacenamiento. Reintenta o revisa el diagnóstico.",
         PreparationCause.NoSpotify => Preparation.Message,
         PreparationCause.NoTrack => AutomaticUpdatesEnabled ? "No hay canción identificable. Elige una en Spotify." : "No hay canción mostrada. Reanuda el seguimiento.",
         PreparationCause.LyricsOffline => "Sin conexión al servicio de letras. Comprueba la red y reintenta.",
         PreparationCause.DailyLimit => "Límite local agotado. Puedes leer; consulta el detalle para volver a generar.",
-        PreparationCause.Result => "Puedes leer el resultado. Revisa el detalle antes de regenerar.",
+        PreparationCause.Result => Preparation.Kind == NoticeKind.Warning ? "Puedes leer el resultado anterior. La última consulta falló; revisa el detalle." : Preparation.Blockers.FirstOrDefault() is { } blocker ? "Puedes leer el resultado. " + blocker.Message : "Puedes leer el resultado. Revisa el detalle antes de regenerar.",
         PreparationCause.ModelMissing => "Falta un modelo válido. Elígelo en los ajustes de IA.",
         PreparationCause.PlanPaused or PreparationCause.ApiDisabled => "Consultas pausadas. Revisa la habilitación de IA.",
         PreparationCause.AiFailed => "La consulta de IA falló. Conservas la letra; revisa el detalle antes de reintentar.",

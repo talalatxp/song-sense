@@ -32,6 +32,7 @@ public sealed partial class MainViewModel
     private static string LanguageLabel(string language) => language == "mixed" ? "Mixto" : OutputLanguages.All.FirstOrDefault(l => l.Code == language)?.Name ?? language;
     private void NotifyProvenance()
     {
+        OnChanged(nameof(HasFailedLocalSave)); OnChanged(nameof(SaveRecoveryMessage)); OnChanged(nameof(CanRetryLocalSave)); RetryLocalSaveCommand?.Refresh();
         OnChanged(nameof(IdentifiedSourceLanguage)); OnChanged(nameof(LyricsSaveState)); OnChanged(nameof(InsightSaveState)); OnChanged(nameof(ReadingSource)); OnChanged(nameof(AnalysisDetails)); OnChanged(nameof(SongDetails));
     }
 }

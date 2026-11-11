@@ -149,6 +149,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
         this.clock = clock ?? TimeProvider.System;
         this.cache = cache;
         this.connection = connection;
+        RetryLocalSaveCommand = new AsyncCommand(RetryLocalSaveAsync, () => CanRetryLocalSave);
         ResumeTrackingCommand = new ActionCommand(() => AutomaticUpdatesEnabled = true, () => CanResumeTracking);
         appliedScope = CacheScope; appliedModel = EffectiveModel;
         if (connection is not null) connection.Changed += ConnectionChanged;
@@ -258,6 +259,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
 
     private void NotifyLyrics()
     {
+        OnChanged(nameof(TrackingPauseMessage)); OnChanged(nameof(TrackingPauseHeading)); OnChanged(nameof(TrackingPauseContext));
         NotifyProvenance();
         OnChanged(nameof(SongDetails));
         OnChanged(nameof(CanDeleteSong)); OnChanged(nameof(CanDeleteCache));
@@ -404,6 +406,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged
     }
     private void NotifyInsight()
     {
+        NotifyMainComposition();
         foreach (var name in new[] { nameof(ReadingContextHint), nameof(ShowPreparationNotice), nameof(PreparationNoticeDetails), nameof(PreparationSummary) }) OnChanged(name);
         NotifyLanguageNotice();
         NotifyProvenance();

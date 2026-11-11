@@ -1,0 +1,11 @@
+[
+  {
+    "path": "tools/A303Preview/Program.cs",
+    "sha256": "346a979c8e54c6d9753e46efe325769cc4fa6cccb893c51f37b75de7d2b5d9bd",
+    "blob": "97744d2194864679357fdc3c18fa803b1d9e9725",
+    "category": "Literal secret",
+    "count": 2,
+    "reason": "Exact synthetic replacement input used by the API settings preview; not a provider credential.",
+    "provenance": "A303Preview: PasswordBox replacement scenario; reviewed in A4-02 on 2026-10-29."
+  }
+]

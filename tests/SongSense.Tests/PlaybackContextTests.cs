@@ -133,6 +133,35 @@ public sealed class PlaybackContextTests(ITestOutputHelper output)
         Assert.Contains(nameof(vm.CacheMessage), journal.Names); Assert.Contains(nameof(vm.PlaybackStatus), journal.Names);
         foreach (var entry in journal.Snapshot) output.WriteLine(entry.ToString());
     }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PauseNoticeTracksLyricsAndValidObservationWithoutInferring(bool withResult)
+    {
+        var provider = new Provider(); var vm = await Create(new(), provider);
+        vm.ApplyDetection(Observation(1)); vm.AutomaticUpdatesEnabled = false;
+        Assert.True(vm.ShowTrackingPause);
+        Assert.Equal("Seguimiento pausado", vm.TrackingPauseMessage);
+        var names = new NotificationJournal(); vm.PropertyChanged += names.Record;
+        vm.SaveManual(vm.BeginLyricsEdit()!, "Letra propia");
+        Assert.Equal("Seguimiento pausado · letra fijada", vm.TrackingPauseMessage);
+        Assert.Contains(nameof(vm.TrackingPauseMessage), names.Names);
+        if (withResult) await vm.GenerateInsightAsync();
+        var result = vm.Insight;
+        vm.ApplyDetection(Observation(2));
+        Assert.Contains("Spotify reproduce otra canción; se conserva la mostrada", vm.TrackingPauseMessage);
+        Assert.Same(result, vm.Insight); Assert.Equal(1, vm.CurrentTrack!.Revision);
+        // Even an invalid observation carrying a track must not claim another song.
+        vm.ApplyDetection(new(ApplicationState.Error, Observation(3).Track, null));
+        Assert.DoesNotContain("otra canción", vm.TrackingPauseMessage);
+        Assert.DoesNotContain("otra canción", vm.PlaybackStatus);
+        vm.ApplyDetection(Observation(1, PlaybackState.Paused));
+        Assert.DoesNotContain("otra canción", vm.TrackingPauseMessage);
+        vm.ResumeTrackingCommand.Execute(null);
+        Assert.False(vm.ShowTrackingPause); Assert.Equal(withResult ? 1 : 0, provider.Inferences);
+        await vm.StopAsync();
+    }
+
     private sealed record Notification(long Sequence, int Thread, string? Name);
     private sealed class NotificationJournal
     {

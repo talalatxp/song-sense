@@ -14,11 +14,22 @@ public sealed partial class AiSettingsViewModel
     private bool modeSubscribed;
     public bool ApiSelected => analysisSession?.Mode != AiConnectionMode.ChatGptIncluded;
     public string NoticeSummary => FormInstruction;
+    public string FooterStatus => busy ? Operation switch
+    {
+        ApiSettingsOperation.Testing => "Prueba de pago en curso.",
+        ApiSettingsOperation.Saving => "Guardando en este dispositivo.",
+        ApiSettingsOperation.DeletingKey => "Eliminando la clave local.",
+        _ => "Cargando ajustes locales."
+    } : !initialized ? "Revisa el estado de los ajustes." : !IsDraftValid ? "Revisa los campos señalados." : ChangeStatus;
+    public string FooterTestReason => busy ? Operation == ApiSettingsOperation.Testing ? "Puede generar coste aunque canceles." : "" : !ApiSelected || IsDraftValid && !HasChanges ? TestReason : "";
+    public NoticePresentation FormPresentation => !initialized ? busy ? NoticePresentation.Contextual : NoticePresentation.Attention
+        : !IsDraftValid ? NoticePresentation.Attention : busy || HasChanges ? NoticePresentation.Contextual : NoticePresentation.Routine;
+    public NoticePresentation ResultPresentation => LastOperationKind is NoticeKind.Error or NoticeKind.Warning ? NoticePresentation.Attention : NoticePresentation.Contextual;
     public bool IsDraftValid => CurrentModelError.Length + CurrentLimitError.Length + CurrentKeyError.Length + CurrentNoticeError.Length == 0;
     public string FormInstruction => busy ? OperationMessage : !initialized ? message
         : !IsDraftValid ? "Borrador inválido. Revisa los campos antes de guardar o probar."
         : HasChanges ? "Cambios sin guardar. Guarda antes de probar; guardar no envía solicitudes."
-        : "Sin cambios pendientes; se conserva la configuración guardada.";
+        : "Sin cambios pendientes.";
     public NoticeKind FormNoticeKind => busy ? NoticeKind.Progress : !initialized ? messageKind : !IsDraftValid ? validationAttempted ? NoticeKind.Error : NoticeKind.Warning : NoticeKind.Information;
     private void ModeChanged(object? sender, EventArgs args) => NotifyForm();
     public bool HasChanges => initialized && (draftKeyLength > 0 || enabled != saved.AiEnabled || model != (saved.Model ?? "") || limitText != saved.DailyRequestLimit.ToString(CultureInfo.InvariantCulture) || accepted != savedAcceptance);
@@ -39,7 +50,7 @@ public sealed partial class AiSettingsViewModel
         }
     }
     public bool CanTest => CanManage && ApiSelected && !HasChanges && IsDraftValid && saved.AiEnabled && hasKey && AiSettingsRules.IsValidModel(saved.Model);
-    public string TestReason => !ApiSelected ? "La API está bloqueada mientras el modo activo sea ChatGPT. Elige API de pago explícitamente en Cuenta y consumo." : !IsDraftValid ? "Corrige el borrador antes de guardar o probar. Editar no envía solicitudes." : HasChanges ? "Guarda los cambios antes de probar. Guardar no envía solicitudes." : !saved.AiEnabled ? "Activa IA, acepta el aviso y guarda para poder probar." : !hasKey ? "Guarda una clave para poder probar." : !AiSettingsRules.IsValidModel(saved.Model) ? "Guarda un ID de modelo válido para poder probar." : "Prueba explícita de pago: envía un texto fijo y consume una solicitud; puede generar coste.";
+    public string TestReason => !ApiSelected ? "La API está bloqueada mientras el modo activo sea ChatGPT. Elige API de pago explícitamente en Cuenta e IA." : !IsDraftValid ? "Corrige el borrador antes de guardar o probar. Editar no envía solicitudes." : HasChanges ? "Guarda los cambios antes de probar. Guardar no envía solicitudes." : !saved.AiEnabled ? "Activa IA, acepta el aviso y guarda para poder probar." : !hasKey ? "Guarda una clave para poder probar." : !AiSettingsRules.IsValidModel(saved.Model) ? "Guarda un ID de modelo válido para poder probar." : "Prueba explícita de pago: envía un texto fijo y consume una solicitud; puede generar coste.";
     public string EffectiveConfiguration => $"Modo activo: {(ApiSelected ? "API de pago" : "ChatGPT; API bloqueada")} · Modelo API guardado: {saved.Model ?? "sin elegir"} · {(saved.AiEnabled ? "activada" : "desactivada")}";
     public string ModelError { get; private set; } = "";
     public string LimitError { get; private set; } = "";
@@ -56,7 +67,8 @@ public sealed partial class AiSettingsViewModel
     private void NotifyForm()
     {
         if (validationAttempted) UpdateErrors();
-        foreach (var name in new[] { nameof(AiEnabled), nameof(Model), nameof(Limit), nameof(NoticeAccepted), nameof(HasChanges), nameof(ChangeStatus), nameof(CanTest), nameof(TestReason), nameof(EffectiveConfiguration), nameof(ModelError), nameof(LimitError), nameof(KeyError), nameof(NoticeError), nameof(FirstInvalidField), nameof(IsDraftValid), nameof(FormInstruction), nameof(FormNoticeKind), nameof(Message), nameof(MessageKind), nameof(NoticeSummary), nameof(HasDraftKey), nameof(DiscardChangesMessage) }) PropertyChanged?.Invoke(this, new(name));
+        foreach (var name in new[] { nameof(FormPresentation), nameof(ResultPresentation) }) PropertyChanged?.Invoke(this, new(name));
+        foreach (var name in new[] { nameof(AiEnabled), nameof(Model), nameof(Limit), nameof(NoticeAccepted), nameof(HasChanges), nameof(ChangeStatus), nameof(CanTest), nameof(TestReason), nameof(EffectiveConfiguration), nameof(ModelError), nameof(LimitError), nameof(KeyError), nameof(NoticeError), nameof(FirstInvalidField), nameof(IsDraftValid), nameof(FormInstruction), nameof(FormNoticeKind), nameof(Message), nameof(MessageKind), nameof(NoticeSummary), nameof(FooterStatus), nameof(FooterTestReason), nameof(HasDraftKey), nameof(DiscardChangesMessage) }) PropertyChanged?.Invoke(this, new(name));
     }
     private void ClearErrors() { validationAttempted = false; draftKeyError = ""; ModelError = LimitError = KeyError = NoticeError = ""; FirstInvalidField = null; }
     private void UpdateErrors()

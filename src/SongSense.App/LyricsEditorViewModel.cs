@@ -6,7 +6,7 @@ public sealed class LyricsEditorViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly MainViewModel owner;
     private readonly LyricsEditContext context;
-    private string manualText, originalText, error = "";
+    private string manualText, originalText, manualSaveError = "", versionSaveError = "";
     private CandidateOption? selected;
     private bool manualTouched, saveAttempted, validationCorrected;
     public LyricsEditorViewModel(MainViewModel owner, LyricsEditContext context)
@@ -42,19 +42,50 @@ public sealed class LyricsEditorViewModel : INotifyPropertyChanged, IDisposable
     public bool Saving { get; private set; }
     public bool CanEditDraft => !Saving;
     public bool CanCopyDraft => ManualText.Length > 0;
-    public bool HasChanges => manualText != originalText || Selected is not null;
+    public bool HasChanges => ManualHasChanges || Selected is not null;
+    private bool ManualHasChanges => manualText != originalText;
     public bool IsValid => !string.IsNullOrWhiteSpace(ManualText) && ManualText.Length <= 20_000;
-    public string Error => !IsCurrent ? "La canción o la letra ha cambiado. El borrador sigue vinculado a la canción original; puedes editarlo y copiarlo, pero no aplicarlo aquí."
-        : error;
+    private const string StaleDraft = "La canción o la letra ha cambiado. Puedes editar y copiar el borrador. No se puede aplicar aquí.";
+    public string Error => !IsCurrent ? StaleDraft : manualSaveError.Length > 0 ? manualSaveError : versionSaveError;
+    public string VersionError => !IsCurrent ? StaleDraft : versionSaveError;
     public string ErrorSummary => !IsCurrent ? "Borrador anterior: puedes editarlo y copiarlo" : "No se guardó: revisa el motivo y reintenta";
     public string ManualError => ManualText.Length > 20_000 ? "Supera 20.000 caracteres. Corrige el exceso; no se recorta el texto." : !IsValid && (manualTouched || saveAttempted) ? "Introduce una letra que no esté vacía." : "";
     public string ManualFeedback => ManualError.Length > 0 ? ManualError : validationCorrected ? "Letra corregida: no está vacía y respeta los 20.000 caracteres." : "";
-    public string ManualAccessibilityHint => ManualError.Length > 0 ? ManualError : ManualHint;
-    public string ManualHint => !IsValid && ManualError.Length == 0 ? "Guardar requiere una letra no vacía, de hasta 20.000 caracteres." : "";
-    public string SaveMessage { get; private set; } = "Borrador sin guardar · solo en esta ventana.";
-    public string ManualText { get => manualText; set { var hadError = ManualError.Length > 0; manualText = value; manualTouched = true; validationCorrected = IsValid && (hadError || validationCorrected); error = ""; Notify(); } }
+    public string ManualStatus
+    {
+        get
+        {
+            if (!IsCurrent) return StaleDraft;
+            if (Saving) return "Guardando letra…";
+            if (manualSaveError.Length > 0) return manualSaveError;
+            if (!IsValid) return ManualError.Length > 0 ? ManualError : ManualHint;
+            if (!ManualHasChanges) return "";
+            return validationCorrected ? "Letra corregida. Borrador sin guardar." : "Borrador sin guardar.";
+        }
+    }
+    public bool ManualStatusNeedsAttention => !IsCurrent || !Saving && (manualSaveError.Length > 0 || ManualError.Length > 0);
+    public string ManualAccessibilityHint => ManualStatus;
+    public string ManualHint => !IsValid && ManualError.Length == 0 ? "Escribe una letra no vacía, de hasta 20.000 caracteres." : "";
+    public string SaveMessage { get; private set; } = "";
+    public string ManualText
+    {
+        get => manualText;
+        set
+        {
+            if (value == manualText) return;
+            var hadError = ManualError.Length > 0;
+            manualText = value;
+            manualTouched = true;
+            validationCorrected = ManualHasChanges && IsValid && (hadError || validationCorrected);
+            manualSaveError = "";
+            Notify();
+        }
+    }
     public string CharacterCount => $"{ManualText.Length:N0} / 20.000 caracteres";
-    public CandidateOption? Selected { get => selected; set { selected = value; error = ""; Notify(); } }
+    public CandidateOption? Selected { get => selected; set { if (selected == value) return; selected = value; versionSaveError = ""; Notify(); } }
+    public string PreviewHeading => Selected is null ? "Vista previa" : Selected.Title;
+    public string PreviewIdentity => Selected?.FullIdentity ?? "";
+    public string PreviewInstruction => Selected is null ? "Selecciona una versión para revisar su letra antes de confirmar." : "";
     public string Preview => Selected is null ? "" : Selected.Candidate.IsInstrumental ? "Esta canción es instrumental" : LyricsResolution.TextOf(Selected.Candidate);
     public string PreviewStanza => string.Join("\n", Preview.Replace("\r\n", "\n").Split("\n\n", StringSplitOptions.RemoveEmptyEntries).Take(1));
     public AsyncCommand ConfirmCommand { get; }
@@ -69,7 +100,10 @@ public sealed class LyricsEditorViewModel : INotifyPropertyChanged, IDisposable
         try
         {
             var result = await owner.SaveEditedLyricsAsync(context, version ? null : ManualText, version ? Selected?.Candidate.Id : null);
-            error = result.Success ? "" : result.Message; SaveMessage = result.Message;
+            var failure = result.Success ? "" : result.Message;
+            if (version) versionSaveError = failure;
+            else manualSaveError = failure;
+            SaveMessage = result.Message;
             if (result.Success) { originalText = manualText; selected = null; Committed?.Invoke(this, EventArgs.Empty); }
         }
         finally { Saving = false; Notify(); }
@@ -77,7 +111,7 @@ public sealed class LyricsEditorViewModel : INotifyPropertyChanged, IDisposable
     private void OwnerChanged(object? sender, PropertyChangedEventArgs args) => Notify();
     private void Notify()
     {
-        foreach (var name in new[] { nameof(ErrorSummary), nameof(ManualFeedback), nameof(ManualAccessibilityHint), nameof(ManualError), nameof(ManualHint), nameof(CanCopyDraft), nameof(VersionsStep), nameof(ComparingVersions), nameof(CanPreviewVersion), nameof(VersionsMessage), nameof(ManualText), nameof(CharacterCount), nameof(Selected), nameof(Preview), nameof(PreviewStanza), nameof(IsCurrent), nameof(Saving), nameof(CanEditDraft), nameof(HasChanges), nameof(IsValid), nameof(Error), nameof(SaveMessage) }) PropertyChanged?.Invoke(this, new(name));
+        foreach (var name in new[] { nameof(ErrorSummary), nameof(VersionError), nameof(ManualStatus), nameof(ManualStatusNeedsAttention), nameof(ManualFeedback), nameof(ManualAccessibilityHint), nameof(ManualError), nameof(ManualHint), nameof(CanCopyDraft), nameof(VersionsStep), nameof(ComparingVersions), nameof(CanPreviewVersion), nameof(VersionsMessage), nameof(ManualText), nameof(CharacterCount), nameof(Selected), nameof(Preview), nameof(PreviewStanza), nameof(PreviewHeading), nameof(PreviewIdentity), nameof(PreviewInstruction), nameof(IsCurrent), nameof(Saving), nameof(CanEditDraft), nameof(HasChanges), nameof(IsValid), nameof(Error), nameof(SaveMessage) }) PropertyChanged?.Invoke(this, new(name));
         ConfirmCommand.Refresh(); SaveCommand.Refresh();
     }
     public void Dispose() => owner.PropertyChanged -= OwnerChanged;
@@ -85,6 +119,19 @@ public sealed class LyricsEditorViewModel : INotifyPropertyChanged, IDisposable
 public sealed record CandidateOption(LyricsCandidate Candidate)
 {
     public override string ToString() => $"{Title} · {Details}";
+    public string FullIdentity
+    {
+        get
+        {
+            var fields = new List<string>();
+            if (!string.IsNullOrWhiteSpace(Candidate.Title)) fields.Add("Título: " + Candidate.Title);
+            if (!string.IsNullOrWhiteSpace(Candidate.Artist)) fields.Add("Artista: " + Candidate.Artist);
+            if (!string.IsNullOrWhiteSpace(Candidate.Album)) fields.Add("Álbum: " + Candidate.Album);
+            if (Candidate.Duration is { } duration) fields.Add($"Duración: {(int)duration.TotalMinutes}:{duration.Seconds:00}");
+            fields.Add("Origen: LRCLIB");
+            return string.Join("\n", fields);
+        }
+    }
     public string Title => Candidate.Title;
     public string Details => $"{Candidate.Artist} · {Candidate.Album ?? "Álbum desconocido"} · " + (Candidate.Duration is { } d ? $"{(int)d.TotalMinutes}:{d.Seconds:00}" : "Duración desconocida");
 }

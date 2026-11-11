@@ -23,6 +23,7 @@ public partial class AiSettingsWindow : Window
         this.viewModel = viewModel;
         DataContext = viewModel;
         viewModel.ValidationFailed += FocusInvalidField;
+        viewModel.PropertyChanged += RevealOperationError;
         SourceInitialized += (_, _) => WindowAppearance.Apply(this);
         Loaded += async (_, _) => await viewModel.InitializeAsync();
         Closing += async (_, args) =>
@@ -39,7 +40,18 @@ public partial class AiSettingsWindow : Window
             // event has returned, and skip it if the owner already closed us.
             await Dispatcher.InvokeAsync(() => { if (IsLoaded) Close(); });
         };
-        Closed += (_, _) => { closed = true; viewModel.ValidationFailed -= FocusInvalidField; viewModel.Dispose(); };
+        Closed += (_, _) => { closed = true; viewModel.ValidationFailed -= FocusInvalidField; viewModel.PropertyChanged -= RevealOperationError; viewModel.Dispose(); };
+    }
+    private void RevealOperationError(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
+    {
+        if (args.PropertyName == nameof(AiSettingsViewModel.LastOperationMessage) && viewModel.HasOperationResult && viewModel.LastOperationKind == NoticeKind.Error)
+            OperationResult.IsExpanded = true;
+    }
+    private void AdaptLayout(object sender, SizeChangedEventArgs args)
+    {
+        if (FormScroll is null) return;
+        UiLayout.SetIsCompact(this, ActualWidth < 600);
+        FormScroll.Margin = new Thickness(ActualWidth < 600 ? 12 : 24);
     }
     private async void SaveSettings(object sender, RoutedEventArgs args)
     {

@@ -59,6 +59,31 @@ public sealed class AutomaticWorkflowTests
         Assert.Equal(5, vm.Insight!.TrackRevision); await vm.StopAsync();
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task PausedTrackingKeepsExplicitAnalysisScopedAndResumeNeverInfers(bool startWhilePaused, bool resumeBeforeCompletion)
+    {
+        var pending = new TaskCompletionSource<SongInsight>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var provider = new Provider { Generate = (_, _) => pending.Task };
+        var vm = await Start(provider); Observe(vm, 1); await vm.WaitForAutomaticAsync();
+        if (startWhilePaused) vm.AutomaticUpdatesEnabled = false;
+        var operation = vm.GenerateInsightAsync(); await Until(() => provider.InsightCalls.Count == 1);
+        vm.AutomaticUpdatesEnabled = false;
+        Observe(vm, 2); Observe(vm, 3);
+        Assert.Contains("otra canción", vm.TrackingPauseMessage);
+        if (resumeBeforeCompletion) vm.ResumeTrackingCommand.Execute(null);
+        pending.SetResult(Result(Track(1))); await operation;
+        if (startWhilePaused && !resumeBeforeCompletion) Assert.Equal(1, vm.Insight!.TrackRevision);
+        else Assert.Null(vm.Insight);
+        if (!resumeBeforeCompletion) { Assert.Equal(1, vm.CurrentTrack!.Revision); vm.ResumeTrackingCommand.Execute(null); }
+        await vm.WaitForAutomaticAsync();
+        Assert.Equal(3, vm.CurrentTrack!.Revision); Assert.Null(vm.Insight);
+        Assert.Single(provider.InsightCalls); Assert.False(vm.ShowTrackingPause);
+        await vm.StopAsync();
+    }
+
     [Fact]
     public async Task PausingFreezesContentAndResumingUsesLatestObservation()
     {

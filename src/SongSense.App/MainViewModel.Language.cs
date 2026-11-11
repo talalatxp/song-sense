@@ -60,6 +60,10 @@ public sealed partial class MainViewModel
     }
     public string LanguagePreferenceStatus => languageSaving ? "Guardando selección…" : languageSaveFailed ? "Selección sin guardar." : "Destino seleccionado: " + OutputLanguages.Get(targetLanguage).Name;
     public NoticeKind LanguageNoticeKind => languageSaveFailed ? NoticeKind.Error : languageSaving ? NoticeKind.Progress : NoticeKind.Information;
+    public NoticePresentation LanguagePresentation => languageSaveFailed ? NoticePresentation.Attention : NoticePresentation.Contextual;
+    public string LanguageFeedbackMessage => languageSaveFailed || LanguageContextIsCurrent &&
+        (languageCancelledAnalysis || previousLanguageResult is not null || store is not IOutputLanguageSettings)
+        ? LanguageMessage : LanguageSummary;
     private sealed record SavedLanguageResult(LanguageContext Context, string Language);
     private void ClearLanguageNotice()
     {
@@ -69,6 +73,8 @@ public sealed partial class MainViewModel
     }
     private void NotifyLanguageNotice()
     {
+        OnChanged(nameof(LanguagePresentation));
+        OnChanged(nameof(LanguageFeedbackMessage));
         foreach (var property in new[] { nameof(LanguageMessage), nameof(ShowLanguageMessage), nameof(LanguageSummary), nameof(ShowLanguageRetry), nameof(LanguageNoticeKind), nameof(LanguagePreferenceStatus) }) OnChanged(property);
     }
     private void LanguageCacheRestored()

@@ -3,86 +3,95 @@
  Title="Song Sense" Width="860" Height="780" MinWidth="360" MinHeight="480" SizeChanged="AdaptReadingLayout"
  Background="{DynamicResource Canvas}" Foreground="{DynamicResource Ink}" FontFamily="Segoe UI" Icon="pack://application:,,,/SongSense;component/Assets/SongSense.ico" WindowStartupLocation="CenterScreen">
  <Window.Resources><BooleanToVisibilityConverter x:Key="BoolVis"/></Window.Resources>
- <ScrollViewer x:Name="MainOuterScroll" Margin="12" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><Grid x:Name="RootGrid" MinHeight="{DynamicResource UiMainMinimumHeight}" Height="{Binding ViewportHeight, ElementName=MainOuterScroll}">
-  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-  <ScrollViewer Grid.RowSpan="2" MaxHeight="110" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel>
-  <Grid Margin="0,0,0,4">
-   <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-   <TextBlock x:Name="BrandText" AutomationProperties.Name="Song Sense" Text="&#x1D11E;ong &#x1D11E;ense" FontFamily="Georgia" FontSize="{DynamicResource UiHeading22}" Foreground="{DynamicResource Gold}" VerticalAlignment="Center" Margin="0,0,18,0"/>
-   <StackPanel Grid.Column="1">
-    <TextBlock x:Name="TrackContext" Text="{Binding TrackContextLabel}" FontSize="{DynamicResource UiInstructionFont}" Foreground="{DynamicResource Muted}" AutomationProperties.AutomationId="TrackContextLabel"><TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}"><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding IsCompactLayout, RelativeSource={RelativeSource AncestorType=Window}}" Value="True"/><Condition Binding="{Binding TrackContextLabel}" Value="AHORA SUENA"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Collapsed"/></MultiDataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
-    <TextBlock x:Name="TrackTitleText" Text="{Binding TrackTitle}" ToolTip="{Binding TrackTitle}" FontFamily="Georgia" FontSize="{DynamicResource UiHeading20}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
-    <TextBlock Text="{Binding Artist}" FontSize="{DynamicResource UiInstructionFont}" Foreground="{DynamicResource Muted}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+ <ScrollViewer x:Name="MainOuterScroll" Margin="24" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+ <Grid x:Name="RootGrid" Height="{Binding ViewportHeight, ElementName=MainOuterScroll}">
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <Grid x:Name="IdentityBlock" Margin="0,0,0,12">
+   <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+   <StackPanel>
+    <TextBlock x:Name="TrackContext" Text="{Binding TrackContextLabel}" Foreground="{DynamicResource Muted}" FontSize="{DynamicResource UiSecondaryFont}" AutomationProperties.AutomationId="TrackContextLabel"/>
+    <TextBlock x:Name="TrackTitleText" Text="{Binding HeaderTitle}" ToolTip="{Binding TrackTitle}" FontFamily="Georgia" FontSize="{DynamicResource UiHeading20}" TextTrimming="CharacterEllipsis" TextWrapping="Wrap" AutomationProperties.HelpText="El título completo está disponible en Menú, Detalles de la canción."/>
+    <TextBlock x:Name="ArtistText" Text="{Binding Artist}" FontSize="{DynamicResource UiSecondaryFont}" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
    </StackPanel>
-   <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-    <Button Content="Cuenta" Click="OpenConnection" Style="{StaticResource QuietButton}" Padding="8,5" FontSize="{DynamicResource UiControlFont}" Margin="4,0,4,0"/>
-    <Button Content="Ajustes" Click="OpenPreferences" Style="{StaticResource QuietButton}" Padding="8,5" FontSize="{DynamicResource UiControlFont}"/>
-   </StackPanel>
-  </Grid>
-
-  </StackPanel></ScrollViewer>
-  <StackPanel Grid.Row="2" Margin="0,0,0,4">
-   <Button x:Name="AiDecisionButton" Click="ReviewAiDecision" Style="{StaticResource QuietButton}" HorizontalAlignment="Left" HorizontalContentAlignment="Left" Padding="6,3" FontSize="{DynamicResource UiControlFont}" Margin="0,0,0,3" MaxWidth="{Binding ActualWidth, ElementName=RootGrid}" AutomationProperties.AutomationId="AiDecision" AutomationProperties.Name="{Binding AiDecisionLabel}" AutomationProperties.HelpText="Configuración para la próxima consulta. Abrir Cuenta para revisarla; no genera análisis.">
-    <Button.Template><ControlTemplate TargetType="Button">
-     <Border x:Name="DecisionBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}">
-      <ContentPresenter TextElement.Foreground="{TemplateBinding Foreground}"/>
-     </Border>
-     <ControlTemplate.Triggers>
-      <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource HoverSurface}"/><Setter Property="Foreground" Value="{DynamicResource SelectionInk}"/></Trigger>
-      <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="DecisionBorder" Property="BorderBrush" Value="{DynamicResource Focus}"/></Trigger>
-     </ControlTemplate.Triggers>
-    </ControlTemplate></Button.Template>
-    <TextBlock Text="{Binding AiDecisionLabel}" FontSize="{DynamicResource UiControlFont}" TextWrapping="Wrap"/>
-   </Button>
-   <DockPanel Margin="0,0,0,4" LastChildFill="True">
-    <Button x:Name="ApplicationMenuButton" Content="⋯" Click="OpenSongMenu" Style="{StaticResource QuietButton}" Padding="10,4" AutomationProperties.Name="Menú de Song Sense y acciones de la canción">
+   <StackPanel x:Name="NavigationBlock" Grid.Column="1" Margin="12,0,0,0">
+    <TextBlock x:Name="BrandText" AutomationProperties.Name="Song Sense" Text="&#x1D11E;ong &#x1D11E;ense" FontFamily="Georgia" FontSize="{DynamicResource UiSecondaryFont}" Foreground="{DynamicResource Gold}" HorizontalAlignment="Right"/>
+    <ui:ActionPanel x:Name="WideNavigation" Margin="0,8,0,0"><Button Content="Cuenta e IA" Click="OpenConnection" Style="{StaticResource QuietButton}"/><Button Content="Preferencias" Click="OpenPreferences" Style="{StaticResource QuietButton}"/></ui:ActionPanel>
+    <Button x:Name="ApplicationMenuButton" Content="⋯" Click="OpenSongMenu" Style="{StaticResource IconButton}" HorizontalAlignment="Right" AutomationProperties.Name="Menú de Song Sense y acciones de la canción">
      <Button.ContextMenu><ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
       <MenuItem Header="Detalles de la canción…" Click="OpenSongDetails"/>
+      <MenuItem Header="Cuenta e IA…" Click="OpenConnection"/><MenuItem Header="Preferencias…" Click="OpenPreferences"/>
+      <MenuItem x:Name="ReviewAiMenuItem" Header="Revisar IA…" Click="ReviewAiDecision"/>
+      <MenuItem Header="Opciones de lectura: idioma y modo…" Click="ToggleReadingTools"/>
+      <MenuItem Header="Ir a lectura" Click="FocusReading" InputGestureText="Alt+L"/>
       <MenuItem Header="Buscar letra" Command="{Binding SearchLyricsCommand}"/>
       <MenuItem Header="Cambiar letra…" Click="ChangeLyrics" IsEnabled="{Binding CanEditLyrics}"/>
       <MenuItem Header="Usar letra guardada" Command="{Binding ConfirmCachedLyricsCommand}"/>
-      <MenuItem Header="Regenerar análisis" Command="{Binding RegenerateCommand}"/>
+      <MenuItem x:Name="RegenerateMenuItem" Header="Regenerar análisis" Command="{Binding RegenerateCommand}"/>
       <MenuItem Header="Ver diagnóstico" Click="ToggleDiagnostic"/>
+      <MenuItem x:Name="OperationDetailsMenuItem" Header="Detalles de la operación y consumo…" Click="ToggleDiagnostic" Visibility="Collapsed"/>
       <Separator/><MenuItem Header="Acerca de Song Sense" Click="ShowAbout"/><MenuItem Header="Salir de Song Sense" Click="ExitApplication"/>
      </ContextMenu></Button.ContextMenu>
     </Button>
-    <Button x:Name="PrimaryActionButton" Content="{Binding PrimaryActionLabel}" Click="ExecutePrimaryAction" IsEnabled="{Binding CanPrimaryAction}" HorizontalAlignment="Left" AutomationProperties.AutomationId="PrimaryAction" Padding="10,6" FontSize="{DynamicResource UiControlFont}" Margin="0,0,6,0"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}"><Style.Triggers><DataTrigger Binding="{Binding ShowPrimaryAction}" Value="False"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Button.Style><Button.ContentTemplate><DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap"/></DataTemplate></Button.ContentTemplate></Button>
-   </DockPanel>
-   <Expander x:Name="ReadingActions" Header="Acciones y estado" IsExpanded="True"><StackPanel>
-    <WrapPanel Margin="0,0,0,4">
-     <TextBlock Text="{Binding PlaybackStatus}" FontSize="{DynamicResource UiInstructionFont}" Foreground="{DynamicResource Muted}" Margin="0,0,8,0" AutomationProperties.AutomationId="PlaybackStatus"/>
-     <TextBlock Text="{Binding TrackingStatus}" FontSize="{DynamicResource UiInstructionFont}" Foreground="{DynamicResource Muted}" Margin="0,0,8,0" AutomationProperties.AutomationId="TrackingStatus"/>
-    </WrapPanel>
-    <TextBlock x:Name="UsageBadge" Text="{Binding CompactUsage}" ToolTip="{Binding UsageMessage}" TextWrapping="Wrap" FontSize="{DynamicResource UiInstructionFont}" Foreground="{DynamicResource Muted}" AutomationProperties.Name="Consumo de la consulta de IA"/>
-    <Button Content="Reanudar" Command="{Binding ResumeTrackingCommand}" HorizontalAlignment="Left" ToolTip="Reanudar seguimiento" AutomationProperties.Name="Reanudar seguimiento" AutomationProperties.AutomationId="ResumeTracking" Padding="10,6" FontSize="{DynamicResource UiControlFont}"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource QuietButton}"><Style.Triggers><DataTrigger Binding="{Binding CanResumeTracking}" Value="False"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
-   </StackPanel></Expander></StackPanel>
-  <StackPanel Grid.Row="3" Margin="0,0,0,4"><ui:StatusNotice AnnouncementScope="{Binding Preparation.Cause}" Visibility="{Binding ShowPreparationNotice, Converter={StaticResource BoolVis}}" Message="{Binding PreparationNoticeDetails}" Summary="{Binding PreparationSummary}" Kind="{Binding DisplayNoticeKind}" FontSize="{DynamicResource UiInstructionFont}"/>
-  </StackPanel>
-   <Grid Grid.Row="4">
-   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-   <TabControl x:Name="ReadingTabs" Grid.Row="1">
-    <TabControl.Resources><Style TargetType="TabItem" BasedOn="{StaticResource {x:Type TabItem}}"><Setter Property="Padding" Value="3,6"/><Setter Property="FontSize" Value="{DynamicResource UiControlFont}"/><Style.Triggers><DataTrigger Binding="{Binding IsCompactLayout, RelativeSource={RelativeSource AncestorType=Window}}" Value="False"><Setter Property="Padding" Value="12,10"/><Setter Property="FontSize" Value="{DynamicResource UiControlFont}"/></DataTrigger></Style.Triggers></Style></TabControl.Resources>
-    <TabItem Header="Letra" AutomationProperties.AutomationId="TranslationTab">
-     <Border Background="{DynamicResource Surface}" CornerRadius="14" Padding="2" BorderBrush="{DynamicResource Outline}" BorderThickness="1">
-      <DockPanel>
-       <ComboBox x:Name="ReadingMode" DockPanel.Dock="Top" HorizontalAlignment="Left" FontSize="{DynamicResource UiControlFont}" Padding="6,2" Margin="0,0,0,2" SelectionChanged="ChangeReadingMode" AutomationProperties.Name="Modo de lectura">
-        <ComboBoxItem Content="Original"/><ComboBoxItem Content="Traducción"/><ComboBoxItem Content="Ambos"/>
-       </ComboBox>
-       <ui:ReadingDocument x:Name="TranslationScroll" AutomationProperties.Name="Letra y traducción · documento de solo lectura"/>
-      </DockPanel>
-     </Border>
-    </TabItem>
-    <TabItem Header="Significado" AutomationProperties.AutomationId="MeaningTab">
-     <Border Background="{DynamicResource Surface}" CornerRadius="14" Padding="2" BorderBrush="{DynamicResource Outline}" BorderThickness="1">
-      <ui:ReadingDocument x:Name="MeaningScroll" AutomationProperties.Name="Significado · documento de solo lectura"/>
-     </Border>
-    </TabItem>
-   </TabControl>
-   <StackPanel>
-    <DockPanel><StackPanel DockPanel.Dock="Left" ToolTip="Idioma de traducción y explicación"><TextBlock Text="Idioma de lectura" FontSize="{DynamicResource UiInstructionFont}"/><TextBlock Text="Traducción y explicación" FontSize="{DynamicResource UiSecondaryFont}"><TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}"><Style.Triggers><DataTrigger Binding="{Binding IsCompactLayout, RelativeSource={RelativeSource AncestorType=Window}}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock></StackPanel><ComboBox x:Name="ReadingLanguage" ItemsSource="{Binding AvailableLanguages}" DisplayMemberPath="Name" SelectedValuePath="Code" SelectedValue="{Binding TargetLanguage, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanChangeLanguage}" HorizontalAlignment="Right" VerticalAlignment="Top" MinWidth="110" Padding="6,4" FontSize="{DynamicResource UiControlFont}" AutomationProperties.Name="Idioma de lectura · traducción y explicación" AutomationProperties.ItemStatus="{Binding SelectedItem.Name, RelativeSource={RelativeSource Self}}"/></DockPanel>
-    <ui:StatusNotice x:Name="LanguageStatus" Margin="0,4,0,4" Visibility="{Binding ShowLanguageMessage, Converter={StaticResource BoolVis}}" Message="{Binding LanguageMessage}" Summary="{Binding LanguageSummary}" Kind="{Binding LanguageNoticeKind}" AnnouncementScope="{Binding TargetLanguage}" FontSize="{DynamicResource UiInstructionFont}"/>
-    <Button Content="Reintentar guardado de idioma" Command="{Binding RetryLanguageCommand}" HorizontalAlignment="Left" FontSize="{DynamicResource UiControlFont}"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource QuietButton}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ShowLanguageRetry}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
    </StackPanel>
-   </Grid>
- <TextBlock x:Name="UsageFooter" Grid.Row="5" Text="{Binding CompactUsage}" ToolTip="{Binding UsageMessage}" FontSize="{DynamicResource UiInstructionFont}" Foreground="{DynamicResource Muted}" Margin="0,4,0,0" AutomationProperties.Name="Consumo de la consulta de IA"><TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsCompactLayout, RelativeSource={RelativeSource AncestorType=Window}}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger><Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed"/></Trigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
-</Grid></ScrollViewer></Window>
+  </Grid>
+  <StackPanel x:Name="TaskArea" Grid.Row="1">
+   <StackPanel x:Name="OperationPanel" Visibility="Collapsed" Margin="0,0,0,8">
+    <TextBlock x:Name="OperationSummary" FontSize="{DynamicResource UiSecondaryFont}" AutomationProperties.LiveSetting="Polite" AutomationProperties.AutomationId="OperationSummary"/>
+    <ContentControl x:Name="OperationActionHost" Focusable="False" IsTabStop="False" HorizontalAlignment="Left" Margin="0,8,0,0"/>
+   </StackPanel>
+   <ui:ActionPanel x:Name="TaskActions" Gap="12" Margin="0,0,0,12">
+    <Button x:Name="PrimaryActionButton" Content="{Binding PrimaryActionLabel}" Click="ExecutePrimaryAction" IsEnabled="{Binding CanPrimaryAction}" Style="{StaticResource PrimaryButton}" AutomationProperties.AutomationId="PrimaryAction"/>
+    <Button x:Name="AiDecisionButton" Click="ReviewAiDecision" Style="{StaticResource QuietButton}" HorizontalContentAlignment="Left" AutomationProperties.AutomationId="AiDecision" AutomationProperties.Name="{Binding AiDecisionLabel}" AutomationProperties.HelpText="Revisar IA: configuración para la próxima consulta, sin generar análisis."><TextBlock><Run Text="Revisar IA · "/><Run Text="{Binding AiDecisionLabel, Mode=OneWay}"/></TextBlock></Button>
+   </ui:ActionPanel>
+   <ui:StatusNotice x:Name="PreparationNotice" Presentation="{Binding PreparationPresentation}" AnnouncementScope="{Binding Preparation.Cause}" Message="{Binding PreparationNoticeDetails}" Summary="{Binding PreparationSummary}" Kind="{Binding DisplayNoticeKind}"/>
+   <ui:StatusNotice x:Name="LanguageStatus" Presentation="{Binding LanguagePresentation}" Visibility="{Binding ShowLanguageMessage, Converter={StaticResource BoolVis}}" Message="{Binding LanguageFeedbackMessage}" Summary="{Binding LanguageSummary}" Kind="{Binding LanguageNoticeKind}" AnnouncementScope="{Binding TargetLanguage}"/>
+   <ui:StatusNotice x:Name="SaveStatus" Visibility="{Binding HasFailedLocalSave, Converter={StaticResource BoolVis}}" Message="{Binding SaveRecoveryMessage}" Summary="Guardado local pendiente de reintento" Kind="Warning"><ui:StatusNotice.ActionContent><Button Content="Reintentar guardado local" Command="{Binding RetryLocalSaveCommand}" Style="{StaticResource QuietButton}"/></ui:StatusNotice.ActionContent></ui:StatusNotice>
+  </StackPanel>
+  <Grid x:Name="TrackingPausePanel" Grid.Row="2" Visibility="{Binding ShowTrackingPause, Converter={StaticResource BoolVis}}" Margin="0,0,0,12">
+   <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+   <TextBlock x:Name="TrackingPauseNotice" Text="{Binding TrackingPauseHeading}" Foreground="{DynamicResource Ink}" FontSize="{DynamicResource UiSecondaryFont}" AutomationProperties.AutomationId="TrackingPauseNotice" AutomationProperties.LiveSetting="Polite" VerticalAlignment="Center"/><TextBlock x:Name="TrackingPauseDetail" Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding TrackingPauseContext}" Foreground="{DynamicResource Muted}" FontSize="{DynamicResource UiSecondaryFont}"/>
+   <Button x:Name="ResumeTrackingButton" Grid.Column="1" Content="Reanudar" Command="{Binding ResumeTrackingCommand}" Style="{StaticResource QuietButton}" Margin="8,0,0,0" VerticalAlignment="Top" AutomationProperties.Name="Reanudar seguimiento" AutomationProperties.AutomationId="ResumeTracking"/>
+  </Grid>
+  <TabControl x:Name="ReadingTabs" Grid.Row="3" Foreground="{DynamicResource Ink}">
+   <TabControl.Template><ControlTemplate TargetType="TabControl"><Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+    <WrapPanel x:Name="ReadingBar"><TabPanel x:Name="ReadingTabHeaders" IsItemsHost="True" Margin="0,0,8,8"/><ContentPresenter Content="{TemplateBinding Tag}" MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}" Margin="0,0,0,8"/></WrapPanel>
+    <ContentPresenter Grid.Row="1" ContentSource="SelectedContent"/>
+   </Grid></ControlTemplate></TabControl.Template>
+   <TabControl.Resources><Style TargetType="TabItem" BasedOn="{StaticResource {x:Type TabItem}}"><Setter Property="Padding" Value="8,6"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabItem"><Border x:Name="ReadingTabBorder" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Outline}" BorderThickness="1" CornerRadius="6" Padding="{TemplateBinding Padding}" Margin="0,0,8,0"><ContentPresenter x:Name="ReadingTabHeader" ContentSource="Header" RecognizesAccessKey="True" TextElement.Foreground="{DynamicResource Ink}"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ReadingTabBorder" Property="Background" Value="{DynamicResource HoverSurface}"/></Trigger><Trigger Property="IsSelected" Value="True"><Setter TargetName="ReadingTabBorder" Property="Background" Value="{DynamicResource Gold}"/><Setter TargetName="ReadingTabHeader" Property="TextElement.Foreground" Value="{DynamicResource OnAccent}"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ReadingTabBorder" Property="BorderBrush" Value="{DynamicResource Focus}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style></TabControl.Resources>
+   <TabControl.Tag><Grid>
+    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+    <ContentControl x:Name="InlineReadingTools" Grid.ColumnSpan="2" Focusable="False" IsTabStop="False"/>
+    <Button x:Name="ReadingToolsButton" Click="ToggleReadingTools" Style="{StaticResource QuietButton}" Padding="8,6" HorizontalAlignment="Left" AutomationProperties.AutomationId="ReadingTools">
+     <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+      <TextBlock x:Name="ReadingToolsLabel" FontSize="{DynamicResource UiSecondaryFont}" TextWrapping="Wrap"/>
+      <Path Grid.Column="1" Data="M1,1 L5,5 L9,1" Width="10" Height="6" Stretch="Fill" Stroke="{DynamicResource Ink}" StrokeThickness="1.5" Margin="6,0,0,0" VerticalAlignment="Center"/>
+     </Grid>
+    </Button>
+    <ContentControl x:Name="CompactOperationActionHost" Grid.Column="1" Visibility="Collapsed" Margin="8,0,0,0" Focusable="False" IsTabStop="False"/>
+    <Popup x:Name="ReadingToolsPopup" Placement="Bottom" PlacementTarget="{Binding ElementName=ReadingToolsButton}" StaysOpen="False" AllowsTransparency="True">
+     <Border x:Name="ReadingToolsFrame" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Outline}" BorderThickness="1" Padding="12">
+      <ui:ActionPanel x:Name="ReadingToolsPanel" Gap="12">
+       <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><TextBlock Text="Idioma" Margin="0,0,8,0" VerticalAlignment="Center"/><ComboBox x:Name="ReadingLanguage" ItemsSource="{Binding AvailableLanguages}" DisplayMemberPath="Name" SelectedValuePath="Code" SelectedValue="{Binding TargetLanguage, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding CanChangeLanguage}" MinWidth="110" AutomationProperties.Name="Idioma de lectura · traducción y explicación" ToolTip="Idioma de traducción y explicación"/></StackPanel>
+       <StackPanel x:Name="ReadingModeGroup" Orientation="Horizontal"><TextBlock Text="Modo" Margin="0,0,8,0" VerticalAlignment="Center"/><ComboBox x:Name="ReadingMode" SelectionChanged="ChangeReadingMode" MinWidth="110" AutomationProperties.Name="Modo de lectura"><ComboBoxItem Content="Original"/><ComboBoxItem Content="Traducción"/><ComboBoxItem Content="Ambos"/></ComboBox></StackPanel>
+      </ui:ActionPanel>
+     </Border>
+    </Popup>
+   </Grid></TabControl.Tag>
+   <TabItem Header="Letra" AutomationProperties.AutomationId="TranslationTab"><Border x:Name="LyricsSurface" Background="{DynamicResource Surface}" CornerRadius="8" BorderBrush="{DynamicResource Outline}" BorderThickness="0"><Grid>
+    <ui:ReadingDocument x:Name="TranslationScroll" AutomationProperties.Name="Letra y traducción · documento de solo lectura"/>
+    <StackPanel x:Name="LyricsEmpty" Margin="16"><TextBlock Text="{Binding LyricsEmptyTitle}" FontWeight="SemiBold" FontSize="{DynamicResource UiHeading18}"/><TextBlock x:Name="LyricsEmptyHelp" Text="{Binding LyricsEmptyExplanation}" Margin="0,8,0,12"/><ContentControl x:Name="LyricsEmptyActionHost"/></StackPanel>
+   </Grid></Border></TabItem>
+   <TabItem Header="Significado" AutomationProperties.AutomationId="MeaningTab"><Border x:Name="MeaningSurface" Background="{DynamicResource Surface}" CornerRadius="8" BorderBrush="{DynamicResource Outline}" BorderThickness="0"><Grid>
+    <ui:ReadingDocument x:Name="MeaningScroll" AutomationProperties.Name="Significado generado por IA · documento de solo lectura"/>
+    <StackPanel x:Name="MeaningEmpty" Margin="16"><TextBlock x:Name="MeaningEmptyHeading" Text="{Binding MeaningEmptyTitle}" FontWeight="SemiBold" FontSize="{DynamicResource UiHeading18}"/><TextBlock x:Name="MeaningEmptyHelp" Text="{Binding MeaningEmptyExplanation}" Margin="0,8,0,12"/><ui:ActionPanel><ContentControl x:Name="MeaningEmptyActionHost"/><Button x:Name="ReadOriginalButton" Content="Leer letra original" Click="ReadOriginal" Style="{StaticResource QuietButton}"/></ui:ActionPanel></StackPanel>
+   </Grid></Border></TabItem>
+  </TabControl>
+  <TextBlock x:Name="UsageFooter" Grid.Row="4" Text="{Binding CompactUsage}" ToolTip="{Binding UsageMessage}" FontSize="{DynamicResource UiSecondaryFont}" Foreground="{DynamicResource Muted}" Margin="0,8,0,0" AutomationProperties.Name="Consumo de IA"><TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}"><Style.Triggers><DataTrigger Binding="{Binding Usage.State}" Value="NoSolicitado"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+  <Expander x:Name="ReadingActions" Grid.Row="5" Header="Estado y consumo" IsExpanded="False" Margin="0,12,0,0"><StackPanel>
+   <TextBlock Text="Reproducción" Foreground="{DynamicResource Muted}"/><TextBlock Text="{Binding PlaybackStatus}" AutomationProperties.AutomationId="PlaybackStatus" Margin="0,0,0,8"/>
+   <TextBlock Text="Seguimiento" Foreground="{DynamicResource Muted}"/><TextBlock Text="{Binding TrackingStatus}" AutomationProperties.AutomationId="TrackingStatus" Margin="0,0,0,8"/>
+   <TextBlock Text="Procedencia del resultado" Foreground="{DynamicResource Muted}"/><TextBlock Text="{Binding AnalysisDetails}" Margin="0,0,0,8"/>
+   <TextBlock Text="Consumo de IA" Foreground="{DynamicResource Muted}"/><TextBlock x:Name="UsageBadge" Text="{Binding UsageMessage}" AutomationProperties.Name="Consumo de la consulta de IA"/>
+  </StackPanel></Expander>
+ </Grid></ScrollViewer>
+</Window>

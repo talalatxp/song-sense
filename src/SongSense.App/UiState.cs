@@ -8,6 +8,12 @@ namespace SongSense.App;
 
 public static class UiState
 {
+    private static readonly DependencyPropertyKey HasFieldErrorPropertyKey = DependencyProperty.RegisterAttachedReadOnly("HasFieldError", typeof(bool), typeof(UiState), new PropertyMetadata(false));
+    public static readonly DependencyProperty HasFieldErrorProperty = HasFieldErrorPropertyKey.DependencyProperty;
+    public static bool GetHasFieldError(DependencyObject target) => (bool)target.GetValue(HasFieldErrorProperty);
+    public static readonly DependencyProperty FieldErrorProperty = DependencyProperty.RegisterAttached("FieldError", typeof(string), typeof(UiState), new PropertyMetadata("", (owner, args) => owner.SetValue(HasFieldErrorPropertyKey, !string.IsNullOrWhiteSpace(args.NewValue as string))));
+    public static string GetFieldError(DependencyObject target) => (string)target.GetValue(FieldErrorProperty);
+    public static void SetFieldError(DependencyObject target, string value) => target.SetValue(FieldErrorProperty, value);
     public static readonly DependencyProperty IsBusyProperty = DependencyProperty.RegisterAttached(
         "IsBusy", typeof(bool), typeof(UiState), new FrameworkPropertyMetadata(false));
     public static bool GetIsBusy(DependencyObject target) => (bool)target.GetValue(IsBusyProperty);
@@ -15,9 +21,19 @@ public static class UiState
 }
 
 public enum NoticeKind { Information, Success, Warning, Error, Progress }
+public enum NoticePresentation { Routine, Contextual, Attention }
 
 public sealed class StatusNotice : Control
 {
+    public static readonly DependencyProperty PresentationProperty = DependencyProperty.Register(nameof(Presentation), typeof(NoticePresentation), typeof(StatusNotice), new FrameworkPropertyMetadata(NoticePresentation.Attention, UpdateText));
+    public NoticePresentation Presentation { get => (NoticePresentation)GetValue(PresentationProperty); set => SetValue(PresentationProperty, value); }
+    public static readonly DependencyProperty ExplanationProperty = DependencyProperty.Register(nameof(Explanation), typeof(string), typeof(StatusNotice), new PropertyMetadata(""));
+    public string Explanation { get => (string)GetValue(ExplanationProperty); set => SetValue(ExplanationProperty, value); }
+    public static readonly DependencyProperty ActionContentProperty = DependencyProperty.Register(nameof(ActionContent), typeof(object), typeof(StatusNotice), new PropertyMetadata(null, (owner, args) => owner.SetValue(HasActionPropertyKey, args.NewValue is not null)));
+    private static readonly DependencyPropertyKey HasActionPropertyKey = DependencyProperty.RegisterReadOnly(nameof(HasAction), typeof(bool), typeof(StatusNotice), new PropertyMetadata(false));
+    public static readonly DependencyProperty HasActionProperty = HasActionPropertyKey.DependencyProperty;
+    public object? ActionContent { get => GetValue(ActionContentProperty); set => SetValue(ActionContentProperty, value); }
+    public bool HasAction => (bool)GetValue(HasActionProperty);
     private readonly StatusAnnouncements announcements = new();
     private bool announcementQueued;
     private string previousAnnouncement = "";
@@ -62,8 +78,9 @@ public sealed class StatusNotice : Control
     {
         var notice = (StatusNotice)target;
         var label = notice.Kind switch { NoticeKind.Success => "Listo", NoticeKind.Warning => "Atención", NoticeKind.Error => "Error", NoticeKind.Progress => "En curso", _ => "Información" };
-        notice.SetValue(DisplayTextPropertyKey, label + ": " + (string.IsNullOrWhiteSpace(notice.Summary) ? notice.Message : notice.Summary));
-        notice.SetValue(HasDetailsPropertyKey, !string.IsNullOrWhiteSpace(notice.Summary) && notice.Summary != notice.Message && notice.Message.Length > 0);
+        var text = notice.Presentation == NoticePresentation.Routine || string.IsNullOrWhiteSpace(notice.Summary) ? notice.Message : notice.Summary;
+        notice.SetValue(DisplayTextPropertyKey, (notice.Presentation == NoticePresentation.Attention ? label + ": " : "") + text);
+        notice.SetValue(HasDetailsPropertyKey, notice.Presentation != NoticePresentation.Routine && !string.IsNullOrWhiteSpace(notice.Summary) && notice.Summary != notice.Message && notice.Message.Length > 0);
         notice.QueueAnnouncement();
     }
     public string Message { get => (string)GetValue(MessageProperty); set => SetValue(MessageProperty, value); }
@@ -73,10 +90,10 @@ public sealed class StatusNotice : Control
     {
         protected override string GetClassNameCore() => nameof(StatusNotice);
         protected override AutomationControlType GetAutomationControlTypeCore() => AutomationControlType.Text;
-        protected override string GetNameCore() => notice.Kind switch
+        protected override string GetNameCore() => (notice.Presentation != NoticePresentation.Attention ? "" : notice.Kind switch
         {
             NoticeKind.Success => "Listo: ", NoticeKind.Warning => "Atención: ", NoticeKind.Error => "Error: ",
             NoticeKind.Progress => "En curso: ", _ => "Información: "
-        } + notice.Message;
+        }) + notice.Message;
     }
 }

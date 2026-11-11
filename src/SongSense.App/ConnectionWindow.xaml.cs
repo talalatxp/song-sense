@@ -28,6 +28,12 @@ public partial class ConnectionWindow : Window
         };
         Closed += (_, _) => viewModel.Dispose();
     }
+    private void AdaptLayout(object sender, SizeChangedEventArgs args)
+    {
+        if (ConnectionOuterScroll is null) return;
+        UiLayout.SetIsCompact(this, ActualWidth < 600);
+        ConnectionOuterScroll.Margin = new Thickness(ActualWidth < 600 ? 12 : 24);
+    }
     private async void Connect(object sender, RoutedEventArgs args) => await viewModel.ConnectAsync(false);
     private async void AddAccount(object sender, RoutedEventArgs args) => await viewModel.ConnectAsync(true);
     private async void ChangePendingAccount(object sender, RoutedEventArgs args) => await viewModel.ChangePendingAccountAsync();
@@ -53,7 +59,7 @@ public partial class ConnectionWindow : Window
     private void ReviewModel(object sender, RoutedEventArgs args) => viewModel.Review(2);
     private void OpenDiagnostic(object sender, RoutedEventArgs args)
     {
-        var dialog = new Window { Owner = this, Title = "Diagnóstico de conexión", Width = 460, Height = 360, MinWidth = 360, MinHeight = 320, Content = AuxiliaryContent.Create(viewModel, nameof(ConnectionViewModel.DiagnosticDetails), "Diagnóstico de conexión", viewModel.PrimaryReason, true, nameof(ConnectionViewModel.PrimaryReason)), WindowStartupLocation = WindowStartupLocation.CenterOwner };
+        var dialog = new Window { Owner = this, Title = "Diagnóstico de conexión", Width = 460, Height = 520, MinWidth = 360, MinHeight = 480, Content = AuxiliaryContent.CreatePresentation(viewModel, nameof(ConnectionViewModel.DiagnosticDetails), "Diagnóstico de conexión", viewModel.PrimaryReason, true, nameof(ConnectionViewModel.PrimaryReason)), WindowStartupLocation = WindowStartupLocation.CenterOwner };
         dialog.SourceInitialized += (_, _) => WindowAppearance.Apply(dialog); dialog.Show();
     }
 }

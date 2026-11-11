@@ -23,7 +23,7 @@ public partial class MainWindow : Window
     private void OpenSongDetails(object sender, RoutedEventArgs args)
     {
         if (songDetailsWindow is not null) { songDetailsWindow.Activate(); return; }
-        songDetailsWindow = new Window { Owner = this, DataContext = DataContext, Title = "Detalles de la canción · Song Sense", Width = 480, Height = 400, MinWidth = 360, MinHeight = 320, Content = AuxiliaryContent.Create(DataContext!, nameof(MainViewModel.SongDetails), "Detalles de la canción", "Canción, letra y análisis guardado."), WindowStartupLocation = WindowStartupLocation.CenterOwner };
+        songDetailsWindow = new Window { Owner = this, DataContext = DataContext, Title = "Detalles de la canción · Song Sense", Width = 480, Height = 520, MinWidth = 360, MinHeight = 480, Content = AuxiliaryContent.CreatePresentation(DataContext!, nameof(MainViewModel.SongDetails), "Detalles de la canción", "Canción, letra y análisis guardado."), WindowStartupLocation = WindowStartupLocation.CenterOwner };
         songDetailsWindow.SourceInitialized += (_, _) => { if (songDetailsWindow is not null) WindowAppearance.Apply(songDetailsWindow); };
         songDetailsWindow.Closed += (_, _) => songDetailsWindow = null; songDetailsWindow.Show();
     }
@@ -57,6 +57,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         InitializeReadingNavigation();
+        InitializeMainComposition();
         SourceInitialized += (_, _) => WindowAppearance.Apply(this);
         var preparationTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         bool refreshing = false;
@@ -73,6 +74,12 @@ public partial class MainWindow : Window
     private async void ExecutePrimaryAction(object sender, RoutedEventArgs args)
     {
         if (DataContext is not MainViewModel vm || !vm.CanPrimaryAction) return;
+        if (vm.Preparation.Cause is PreparationCause.DailyLimit or PreparationCause.AiWait)
+        {
+            PreparationNotice.ApplyTemplate();
+            if (PreparationNotice.Template.FindName("NoticeDetail", PreparationNotice) is System.Windows.Controls.Expander detail) detail.IsExpanded = true;
+            PreparationNotice.BringIntoView(); return;
+        }
         var action = vm.Preparation.Action;
         switch (action)
         {
@@ -105,7 +112,7 @@ public partial class MainWindow : Window
     {
         if (diagnosticWindow is not null) { diagnosticWindow.Activate(); return; }
         diagnosticWindow = new Window { Owner = this, DataContext = vm, Title = "Diagnóstico · Song Sense", Width = 600, Height = 480,
-            MinWidth = 360, MinHeight = 320, WindowStartupLocation = WindowStartupLocation.CenterOwner, Content = AuxiliaryContent.Create(vm, nameof(MainViewModel.DiagnosticDetails), "Diagnóstico", vm.Preparation.Message, true, "Preparation.Message") };
+            MinWidth = 360, MinHeight = 480, WindowStartupLocation = WindowStartupLocation.CenterOwner, Content = AuxiliaryContent.CreatePresentation(vm, nameof(MainViewModel.DiagnosticDetails), "Diagnóstico", vm.Preparation.Message, true, "Preparation.Message") };
         diagnosticWindow.SourceInitialized += (_, _) => { if (diagnosticWindow is not null) WindowAppearance.Apply(diagnosticWindow); };
         diagnosticWindow.Closed += (_, _) => diagnosticWindow = null;
         diagnosticWindow.Show();
@@ -117,22 +124,18 @@ public partial class MainWindow : Window
     {
         if (ReadingTabs is null) return;
         var compact = ActualWidth < 600;
-        // Choose a default once, after the opening geometry has been restored.
-        // Subsequent resizing must preserve the user's choice for this window.
-        if (IsLoaded && !readingActionsInitialized)
-        {
-            ReadingActions.IsExpanded = !compact;
-            readingActionsInitialized = true;
-        }
+        if (IsLoaded && !readingActionsInitialized) { ReadingActions.IsExpanded = false; readingActionsInitialized = true; }
         IsCompactLayout = compact;
-        BrandText.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-        UsageBadge.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-        MainOuterScroll.Margin = new Thickness(compact ? 4 : 12);
+        MainOuterScroll.Margin = new Thickness(compact ? 12 : 24);
+        UpdateMainComposition();
     }
     private void OpenSongMenu(object sender, RoutedEventArgs args)
     {
         if (sender is System.Windows.Controls.Button { ContextMenu: { } menu } button)
-        { menu.PlacementTarget = button; menu.IsOpen = true; }
+        {
+            if (DataContext is MainViewModel vm) { ReviewAiMenuItem.Header = "Revisar IA · " + vm.AiDecisionLabel; RegenerateMenuItem.Header = "Regenerar análisis · " + vm.AiDecisionLabel; }
+            menu.PlacementTarget = button; menu.IsOpen = true;
+        }
     }
     private void ChangeLyrics(object sender, RoutedEventArgs args)
     {
@@ -150,7 +153,7 @@ public partial class MainWindow : Window
     public async Task ConfirmDeletionAsync(bool all)
     {
         if (DataContext is not MainViewModel vm || vm.BeginCacheDeletion(all) is not { } request) return;
-        if (!ConfirmationWindow.Ask(this, "Eliminar contenido guardado", $"Se eliminará {request.Label}: letra manual o seleccionada, selección de versión y análisis guardados. Es una operación local; no modifica Spotify. Conserva claves, preferencias y contador de solicitudes. No se puede deshacer. ¿Eliminar este contenido?", "Eliminar contenido")) return;
+        if (!ConfirmationWindow.Ask(this, "Eliminar contenido guardado", $"Se eliminará {request.Label}: letra manual o seleccionada, selección de versión y análisis guardados. Es una operación local; no modifica Spotify. Conserva claves, preferencias y contador de solicitudes. No se puede deshacer. ¿Eliminar este contenido?", "Eliminar contenido", context: all ? "Todas las canciones guardadas" : vm.TrackTitle + " · " + vm.Artist)) return;
         if (!await vm.ConfirmCacheDeletionAsync(request)) MessageBox.Show(this, vm.CacheMessage, "Contenido guardado");
     }
 }

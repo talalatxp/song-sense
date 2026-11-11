@@ -122,7 +122,7 @@ public sealed class CacheTests : IDisposable
         var track = Track();
         await cache.SaveInsightAsync(track, Lyrics(track), "chosen-model", CacheIdentity.Version, Insight(track));
         var provider = new NeverProvider();
-        var vm = new MainViewModel(new SqliteSettingsStore(Database), provider, insightProvider: provider, cache: new SqliteCacheStore(Database));
+        var vm = new MainViewModel(new SqliteSettingsStore(Database), provider, insightProvider: provider, cache: new SqliteCacheStore(Database, clock));
         vm.ApplyDetection(new(ApplicationState.Playing, track with { Revision = 99 }, null));
         await vm.InitializeAsync(); await vm.WaitForCacheAsync();
         Assert.Equal(Lyrics(track).Text, vm.OriginalLyrics);
